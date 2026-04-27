@@ -850,19 +850,30 @@
 
     // Per-role stack for a single setting. Shows ALL roles (even those with the feature off)
     // so users can adjust their settings; OFF roles render with a greyed-out indicator.
+    // Layout reads as a small table: setting label as a section header, role rows separated
+    // by hairline dividers, controls right-aligned on a consistent column.
     const PerRoleGroup = ({ s, visibleRoles, perRole, featureId, onUpdate, isFirst }) => (
-      <div className="py-3" style={{ borderTop: (!!s.optional && !isFirst) ? '1px solid var(--card-border)' : 'none', marginTop: (!!s.optional && !isFirst) ? 6 : 0 }}>
-        <div className="text-[13px] font-medium mb-2" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
-        <div className="space-y-2">
-          {visibleRoles.map(r => {
+      <div style={{
+        borderTop: !isFirst ? '1px solid var(--card-border)' : 'none',
+        paddingTop: isFirst ? 14 : 18,
+        paddingBottom: 14,
+      }}>
+        <div className="text-[13px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
+        <div className="rounded-lg overflow-hidden bg-white" style={{ border: '1px solid var(--card-border)' }}>
+          {visibleRoles.map((r, idx) => {
             const value = perRole[r.id]?.[featureId]?.values?.[s.id];
             const roleEnabled = !!perRole[r.id]?.[featureId]?.enabled;
             return (
               <div key={r.id}
-                className="role-row grid items-center gap-4"
-                style={{ gridTemplateColumns: '120px 1fr' }}>
+                className="role-row grid items-center"
+                style={{
+                  gridTemplateColumns: '160px 1fr',
+                  padding: '10px 14px',
+                  borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none',
+                  background: '#fff',
+                }}>
                 <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="rounded-full"
+                  <span className="rounded-full shrink-0"
                     style={{ width: 7, height: 7, background: 'var(--green)', opacity: roleEnabled ? 1 : 0.3 }} />
                   <span className="truncate" title={r.name}>{r.name}</span>
                 </div>
@@ -885,13 +896,33 @@
       </button>
     );
 
+    // Eye icons used by the "Show off roles" toggle inside per-role mode.
+    const EyeIcon = ({ size = 14 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+    const EyeOffIcon = ({ size = 14 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-6.5 0-10-7-10-7a18.4 18.4 0 0 1 4.06-5.06" />
+        <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c6.5 0 10 7 10 7a18.4 18.4 0 0 1-2.16 3.19" />
+        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+        <line x1="2" y1="2" x2="22" y2="22" />
+      </svg>
+    );
+
     // Multi-role expanded panel — feature-level Set per role / Match across roles
     const MultiRoleSettingsBlock = ({ feature, roles, perRole, onUpdate, onUpdateShared, onSetPerRole, onMatchAll }) => {
       const enabledRoles = roles.filter(r => perRole[r.id]?.[feature.id]?.enabled);
+      const offRolesCount = roles.length - enabledRoles.length;
       const isPerRole = feature.perRoleMode;
       const mainSettings = feature.settings.filter(s => !s.optional);
       const optionalSettings = feature.settings.filter(s => s.optional);
       const sharedValueFromRole = enabledRoles[0] || roles[0];
+      // Hide OFF roles by default in per-role mode; users can reveal them via the eye toggle.
+      const [showOffRoles, setShowOffRoles] = useState(false);
+      const visibleRolePool = showOffRoles ? roles : enabledRoles;
 
       return (
         <div style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
@@ -908,22 +939,46 @@
                 {isPerRole ? 'Each role can have its own settings' : 'All roles share the same settings'}
               </span>
             </div>
-            <Toggle size="sm" checked={isPerRole}
-              onChange={() => isPerRole ? onMatchAll() : onSetPerRole()} />
+            <div className="flex items-center gap-3">
+              {isPerRole && offRolesCount > 0 && (
+                <button onClick={() => setShowOffRoles(!showOffRoles)}
+                  className="flex items-center gap-1.5 text-[12px] font-medium px-2 py-1 rounded-md hover:bg-black/5 transition-colors"
+                  style={{ color: 'var(--text-secondary)' }}
+                  title={showOffRoles ? 'Hide roles that have this feature off' : 'Show roles that have this feature off'}>
+                  {showOffRoles ? <EyeOffIcon /> : <EyeIcon />}
+                  <span>{showOffRoles ? `Hide off roles` : `Show off roles (${offRolesCount})`}</span>
+                </button>
+              )}
+              <Toggle size="sm" checked={isPerRole}
+                onChange={() => isPerRole ? onMatchAll() : onSetPerRole()} />
+            </div>
           </div>
 
           <div className="px-8 pt-2 pb-5">
           {isPerRole ? (() => {
-            // In per-role mode, show ALL roles — even those with the feature off — so users
-            // can adjust settings ahead of toggling the role on. OFF roles render with a
-            // greyed-out indicator inside PerRoleGroup. Settings whose dependsOn condition
-            // isn't met for ANY role are still hidden entirely.
+            // In per-role mode, show only ON roles by default. OFF roles can be revealed via
+            // the eye toggle above, and when revealed render with a greyed-out indicator
+            // inside PerRoleGroup. Settings whose dependsOn condition isn't met for ANY
+            // visible role are still hidden entirely.
             const renderable = mainSettings
               .map(s => ({
                 s,
-                visibleRoles: roles.filter(r => isSettingVisibleForRole(s, r.id, feature.id, perRole)),
+                visibleRoles: visibleRolePool.filter(r => isSettingVisibleForRole(s, r.id, feature.id, perRole)),
               }))
               .filter(({ visibleRoles }) => visibleRoles.length > 0);
+            if (renderable.length === 0) {
+              return (
+                <div className="text-[12px] italic py-3" style={{ color: 'var(--text-tertiary)' }}>
+                  No roles have this feature enabled.
+                  {offRolesCount > 0 && !showOffRoles && (
+                    <button onClick={() => setShowOffRoles(true)}
+                      className="ml-1 underline" style={{ color: 'var(--brand)' }}>
+                      Show off roles to configure them.
+                    </button>
+                  )}
+                </div>
+              );
+            }
             return renderable.map(({ s, visibleRoles }, i) => (
               <PerRoleGroup key={s.id} s={s} visibleRoles={visibleRoles} perRole={perRole}
                 featureId={feature.id}
