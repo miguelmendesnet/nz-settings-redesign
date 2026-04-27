@@ -643,7 +643,7 @@
     );
 
     // ===== Column Header =====
-    const ColumnHeader = ({ role, isMenuOpen, onMenuToggle, isRenaming, onCommitRename, onCancelRename, onRename, onDuplicate, onRemove, onSaveLater, onAddContact }) => {
+    const ColumnHeader = ({ role, contactCount = 0, isMenuOpen, onMenuToggle, isRenaming, onCommitRename, onCancelRename, onRename, onDuplicate, onRemove, onSaveLater, onAddContact }) => {
       const [tempName, setTempName] = useState(role.name);
       useEffect(() => { if (isRenaming) setTempName(role.name); }, [isRenaming, role.name]);
 
@@ -663,9 +663,12 @@
               style={{ borderColor: 'var(--brand)', color: 'var(--text-primary)' }} maxLength={32} />
           ) : (
             <button type="button" onClick={(e) => { e.stopPropagation(); onAddContact && onAddContact(); }}
-              className="text-[11px] font-bold uppercase tracking-wider truncate max-w-[110px] rounded px-1 py-0.5 hover:bg-black/5 transition-colors"
+              className="text-[11px] font-bold uppercase tracking-wider truncate max-w-[140px] rounded px-1 py-0.5 hover:bg-black/5 transition-colors"
               title={`Add a ${role.name} to this gallery`}
-              style={{ color: 'var(--text-secondary)' }}>{role.name}</button>
+              style={{ color: 'var(--text-secondary)' }}>
+              {role.name}
+              <span className="ml-1" style={{ color: 'var(--text-tertiary)', fontWeight: 600 }}>({contactCount})</span>
+            </button>
           )}
           {!isRenaming && role.removable && (
             <button onClick={(e) => { e.stopPropagation(); onMenuToggle(); }}
@@ -1397,6 +1400,7 @@
                       <div className="pl-6 text-[13px]" style={{ color: 'var(--text-secondary)' }}>Feature</div>
                       {roles.map(r => (
                         <ColumnHeader key={r.id} role={r}
+                          contactCount={contacts.filter(c => c.roleId === r.id).length}
                           isMenuOpen={openMenuRoleId === r.id}
                           onMenuToggle={() => setOpenMenuRoleId(openMenuRoleId === r.id ? null : r.id)}
                           isRenaming={renamingRoleId === r.id}
