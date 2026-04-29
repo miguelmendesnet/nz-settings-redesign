@@ -93,6 +93,93 @@
       transform: rotate(-45deg) translate(1px, -1px);
     }
     .role-row.is-off { opacity: 0.55; }
+
+    /* ============ Mobile responsive (<= 768px) ============ */
+    .mobile-only { display: none; }
+    .gallery-header-mobile { display: none; }
+    @media (max-width: 768px) {
+      .mobile-only { display: flex !important; }
+      .desktop-only { display: none !important; }
+      .zenfolio-nav { display: none !important; }
+      /* Desktop top bar is replaced on mobile by the black gallery header */
+      .top-bar { display: none !important; }
+      .gallery-header { display: none !important; }
+      .gallery-header-mobile { display: block !important; }
+      .tabs-row {
+        padding-left: 16px !important; padding-right: 16px !important;
+        overflow-x: auto; -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap !important;
+        gap: 16px !important;
+        justify-content: space-between;
+      }
+      .tabs-row .tab-btn { font-size: 16px !important; padding: 14px 4px !important; }
+      .tabs-row .tab-btn.is-active { color: var(--brand) !important; font-weight: 700 !important; }
+      .tabs-row .tab-btn.is-active::after { left: 0 !important; right: 0 !important; height: 3px !important; }
+      .tabs-row::-webkit-scrollbar { display: none; }
+      .layout-pane { flex-direction: column !important; }
+      .inner-sidebar { display: none !important; }
+      .main-pane {
+        padding: 12px !important;
+        max-width: 100% !important;
+      }
+      .gallery-features-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+      }
+      .gallery-features-header > button { align-self: flex-start; }
+      /* Feature row on mobile uses card stack instead of grid */
+      .feature-row-mobile {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 16px 14px !important;
+        background: transparent !important;
+        cursor: pointer;
+      }
+      .feature-row-mobile.is-open { background: var(--soft-bg) !important; }
+      /* Multi-role panel padding */
+      .multi-panel-strip { padding-left: 14px !important; padding-right: 14px !important; }
+      .multi-panel-body { padding-left: 14px !important; padding-right: 14px !important; }
+      /* Per-role table rows: stack label/control */
+      .per-role-row {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+        padding: 12px !important;
+      }
+      .per-role-row .control-cell { justify-content: flex-start !important; }
+      .per-role-row select { width: 100% !important; min-width: 0 !important; }
+      /* Shared row: stack */
+      .shared-flat-row {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+        align-items: stretch !important;
+      }
+      .shared-flat-row select { width: 100% !important; min-width: 0 !important; }
+      .shared-flat-row .control-end { justify-content: flex-start !important; }
+      /* Customize per role band wraps */
+      .panel-strip { flex-wrap: wrap; row-gap: 8px; }
+      .show-off-btn span:not([class]) { display: none; }
+      /* Modal card */
+      .modal-card { max-width: 95vw !important; padding: 18px !important; }
+      /* Contacts form */
+      .contacts-form-grid { grid-template-columns: 1fr !important; }
+      .contacts-add-buttons { flex-direction: column; align-items: stretch !important; }
+      .contacts-add-buttons > button,
+      .contacts-add-buttons > div { width: 100%; }
+      .contacts-add-buttons > div > button { width: 100%; }
+      /* Mobile section nav */
+      .mobile-section-nav { display: flex !important; }
+      .features-header-h1 { font-size: 16px !important; }
+    }
+
+    /* ============ Bottom-sheet drawer ============ */
+    @keyframes sheet-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes backdrop-fade-in { from { opacity: 0; } to { opacity: 1; } }
+    .sheet-backdrop { animation: backdrop-fade-in 0.2s ease-out; }
+    .sheet-panel { animation: sheet-slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
+    .sheet-item { transition: background-color 0.12s; }
+    .sheet-item:active { background-color: #F4F3EF; }
   </style>
 </head>
 <body>
@@ -100,6 +187,20 @@
 
   <script type="text/babel">
     const { useState, useMemo, useEffect } = React;
+
+    // ===== Responsive helper =====
+    function useIsMobile() {
+      const [isMobile, setIsMobile] = useState(() =>
+        typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+      );
+      useEffect(() => {
+        const mq = window.matchMedia('(max-width: 768px)');
+        const handler = (e) => setIsMobile(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+      }, []);
+      return isMobile;
+    }
 
     // ===== Icons =====
     const Icon = ({ d, size = 18, stroke = 1.6 }) => (
@@ -124,7 +225,12 @@
       </svg>
     );
     const ChevronRight = ({ size = 14 }) => <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4l4 4-4 4"/></svg>;
+    const ChevronLeft = ({ size = 14 }) => <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 4l-4 4 4 4"/></svg>;
     const ChevronDown = ({ size = 14 }) => <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6l4 4 4-4"/></svg>;
+    const CloseIcon = ({ size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>;
+    const CopyIcon = ({ size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>;
+    const TrashIcon = ({ size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></svg>;
+    const PlusUserIcon = ({ size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M16 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M3 21c0-4 3.5-6 7-6"/><path d="M19 14v6M16 17h6"/></svg>;
     const BellIcon = (p) => <Icon {...p} d={["M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9","M9 21a3 3 0 0 0 6 0"]} />;
     const BookIcon = (p) => <Icon {...p} d={["M4 4h13a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z","M4 4v13"]} />;
     const DashIcon = (p) => <Icon {...p} d={["M3 12l9-9 9 9","M5 10v10h14V10"]} />;
@@ -278,7 +384,7 @@
     ];
 
     const ZenfolioNav = () => (
-      <aside className="shrink-0 flex flex-col items-stretch py-1"
+      <aside className="zenfolio-nav shrink-0 flex flex-col items-stretch py-1"
         style={{ width: 60, background: 'var(--nav-bg)' }}>
         {NAV_ITEMS.map((item) => {
           const Cmp = item.icon;
@@ -294,53 +400,80 @@
     );
 
     const TopBar = () => (
-      <header className="flex items-center justify-between px-6 h-[52px] bg-white border-b" style={{ borderColor: 'var(--card-border)' }}>
-        <div className="flex items-center">
+      <header className="top-bar flex items-center justify-between px-6 h-[52px] bg-white border-b" style={{ borderColor: 'var(--card-border)' }}>
+        <div className="flex items-center gap-2">
           <span className="text-[20px] font-extrabold tracking-tight" style={{ color: '#222' }}>zenfolio</span>
+          <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--brand-cream, #FFF1E6)', color: 'var(--brand)', border: '1px solid var(--brand)' }}>v1</span>
         </div>
         <div className="flex items-center gap-4" style={{ color: 'var(--text-secondary)' }}>
           <button className="hover:text-black"><BookIcon size={18} /></button>
           <button className="hover:text-black"><BellIcon size={18} /></button>
           <div className="flex items-center gap-2 ml-2">
             <div className="w-7 h-7 rounded-full" style={{ background: 'linear-gradient(135deg, #C7C5BF, #9C9994)' }} />
-            <span className="text-[12px] font-bold tracking-wider" style={{ color: 'var(--text-primary)' }}>HI, OLIVIA</span>
+            <span className="top-bar-greeting text-[12px] font-bold tracking-wider" style={{ color: 'var(--text-primary)' }}>HI, OLIVIA</span>
             <ChevronDown size={12} />
           </div>
         </div>
       </header>
     );
 
-    const GalleryHeader = () => (
-      <div className="flex items-start justify-between px-8 pt-5 pb-3 bg-white">
-        <div className="flex items-center gap-3">
-          <div className="w-[68px] h-[48px] rounded-md overflow-hidden">
-            <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #344C44 0%, #6E5C49 60%, #C9A678 100%)' }} />
+    const GalleryHeader = () => {
+      const isMobile = useIsMobile();
+      if (isMobile) {
+        // Mobile gallery header — black bar with back chevron, centered title, pencil edit
+        // on the right; "6 photos" subtitle below in white.
+        return (
+          <div className="gallery-header-mobile">
+            <div className="flex items-center px-3 h-14 text-white" style={{ background: '#1B1C1F' }}>
+              <button className="p-2 -ml-1" style={{ color: '#fff' }} aria-label="Back">
+                <ChevronLeft size={22} />
+              </button>
+              <h2 className="flex-1 text-center text-[18px] font-extrabold tracking-tight truncate px-2">
+                Sample Gallery
+              </h2>
+              <button className="p-2 -mr-1" style={{ color: '#fff' }} aria-label="Edit">
+                <PencilIcon size={20} />
+              </button>
+            </div>
+            <div className="text-center text-[12px] py-2 bg-white" style={{ color: 'var(--text-secondary)' }}>
+              6 photos
+            </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-[19px] font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>Sample Gallery</h2>
-              <button style={{ color: 'var(--text-tertiary)' }} className="hover:text-black"><PencilIcon size={15} /></button>
+        );
+      }
+      return (
+        <div className="gallery-header flex items-start justify-between px-8 pt-5 pb-3 bg-white">
+          <div className="gallery-header-left flex items-center gap-3">
+            <div className="w-[68px] h-[48px] rounded-md overflow-hidden">
+              <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #344C44 0%, #6E5C49 60%, #C9A678 100%)' }} />
             </div>
-            <div className="text-[12px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-              Shoot Date: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Feb 12, 2024</span>
-              <span className="mx-2">·</span>
-              Price List: <a href="#" className="underline" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>None</a>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-[19px] font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>Sample Gallery</h2>
+                <button style={{ color: 'var(--text-tertiary)' }} className="hover:text-black"><PencilIcon size={15} /></button>
+              </div>
+              <div className="text-[12px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                Shoot Date: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Feb 12, 2024</span>
+                <span className="mx-2">·</span>
+                Price List: <a href="#" className="underline" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>None</a>
+              </div>
             </div>
+          </div>
+          <div className="gallery-header-actions flex items-center gap-2">
+            <button className="preview-btn flex items-center gap-2 text-[13px] font-semibold text-white px-5 py-2 rounded-md">Preview</button>
+            <button className="share-btn flex items-center gap-2 text-[13px] font-semibold px-4 py-2 rounded-md">
+              Share <ChevronDown size={12} />
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="preview-btn flex items-center gap-2 text-[13px] font-semibold text-white px-5 py-2 rounded-md">Preview</button>
-          <button className="share-btn flex items-center gap-2 text-[13px] font-semibold px-4 py-2 rounded-md">
-            Share <ChevronDown size={12} />
-          </button>
-        </div>
-      </div>
-    );
+      );
+    };
 
     const Tabs = () => {
       const tabs = ['Organize', 'Settings', 'Design', 'Activity'];
       return (
-        <div className="flex items-center gap-2 px-8 border-b bg-white" style={{ borderColor: 'var(--card-border)' }}>
+        <div className="tabs-row flex items-center gap-2 px-8 border-b bg-white" style={{ borderColor: 'var(--card-border)' }}>
           {tabs.map(t => (
             <button key={t}
               className={`tab-btn text-[14px] py-3 px-3 ${t === 'Settings' ? 'is-active' : ''}`}
@@ -375,7 +508,7 @@
         .map(r => ({ id: r.id, name: r.name, count: contacts.filter(c => c.roleId === r.id).length }))
         .filter(r => r.count > 0);
       return (
-        <aside className="w-[220px] shrink-0 px-5 pt-6 pb-10">
+        <aside className="inner-sidebar w-[220px] shrink-0 px-5 pt-6 pb-10">
           <div className="rounded-xl px-3 py-3 mb-2 bg-white border" style={{ borderColor: 'var(--card-border)' }}>
             <div className="flex items-center gap-2 mb-2"><LockIcon size={15} /><span className="text-[13px] font-semibold">Access &amp; Permissions</span></div>
             <SidebarBadge>Public Gallery</SidebarBadge>
@@ -642,6 +775,86 @@
       </div>
     );
 
+    // ===== Role Actions Bottom Sheet (mobile) =====
+    // iOS-style action sheet that slides up from the bottom on mobile.
+    // Replaces the absolute-positioned RoleMenu dropdown which doesn't work
+    // well on small screens (gets clipped, hard to reach with thumb, etc.).
+    const RoleActionsSheet = ({ role, onClose, onAddContact, onRename, onSaveLater, onDuplicate, onRemove }) => {
+      useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+      }, []);
+      const Item = ({ icon, label, color, bg, danger, onClick }) => (
+        <button type="button" onClick={onClick}
+          className="sheet-item w-full flex items-center gap-3 px-4 py-3 text-left">
+          <span className="flex items-center justify-center rounded-lg shrink-0"
+            style={{ width: 32, height: 32, background: bg, color: color }}>
+            {icon}
+          </span>
+          <span className="text-[15px] font-medium"
+            style={{ color: danger ? 'var(--danger)' : 'var(--text-primary)' }}>{label}</span>
+        </button>
+      );
+      return (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center"
+          onClick={onClose}>
+          <div className="sheet-backdrop absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)' }} />
+          <div className="sheet-panel relative w-full bg-white"
+            style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 'env(safe-area-inset-bottom, 12px)', maxHeight: '85vh' }}
+            onClick={(e) => e.stopPropagation()}>
+            {/* Grab handle */}
+            <div className="flex justify-center pt-2 pb-1">
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: '#D8D5CD' }} />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-3 pt-2 pb-3 border-b"
+              style={{ borderColor: 'var(--card-border)' }}>
+              <button type="button" onClick={onClose}
+                className="text-[15px] px-2 py-1"
+                style={{ color: 'var(--brand)' }}>Cancel</button>
+              <div className="text-[14px] font-bold uppercase tracking-wider truncate px-2"
+                style={{ color: 'var(--text-primary)' }}>{role.name}</div>
+              <div style={{ width: 56 }} />
+            </div>
+            {/* Actions */}
+            <div className="py-2">
+              <Item
+                icon={<PlusUserIcon size={18} />}
+                label={`Add contact to ${role.name}`}
+                color="#FFFFFF" bg="var(--brand)"
+                onClick={onAddContact} />
+              <Item
+                icon={<PencilIcon size={18} stroke={1.7} />}
+                label="Rename"
+                color="#FFFFFF" bg="#3B82F6"
+                onClick={onRename} />
+              <Item
+                icon={<BookIcon size={18} stroke={1.7} />}
+                label="Save for later use"
+                color="#FFFFFF" bg="#F59E0B"
+                onClick={onSaveLater} />
+              <Item
+                icon={<CopyIcon size={18} />}
+                label="Duplicate"
+                color="#FFFFFF" bg="#8B5CF6"
+                onClick={onDuplicate} />
+              {role.removable && (
+                <Item
+                  icon={<TrashIcon size={18} />}
+                  label="Remove"
+                  color="#FFFFFF" bg="var(--danger)"
+                  danger
+                  onClick={onRemove} />
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     // ===== Column Header =====
     const ColumnHeader = ({ role, contactCount = 0, isMenuOpen, onMenuToggle, isRenaming, onCommitRename, onCancelRename, onRename, onDuplicate, onRemove, onSaveLater, onAddContact }) => {
       const [tempName, setTempName] = useState(role.name);
@@ -792,14 +1005,14 @@
     const SimpleSettingsBlock = ({ feature, role, perRole, onUpdate }) => {
       const visibleSettings = feature.settings.filter(s => isSettingVisibleForRole(s, role.id, feature.id, perRole));
       return (
-        <div className="px-8 py-2" style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
+        <div className="multi-panel-body px-8 py-2" style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
           {visibleSettings.map((s, i) => {
             const isToggle = s.type === 'toggle';
             // Only draw a divider above optional sections (e.g. the license agreement at the bottom).
             const showDivider = !!s.optional && i !== 0;
             return (
               <div key={s.id}
-                className="grid items-center gap-4"
+                className="shared-flat-row grid items-center gap-4"
                 style={{
                   gridTemplateColumns: '1fr auto',
                   borderTop: showDivider ? '1px solid var(--card-border)' : 'none',
@@ -815,7 +1028,9 @@
                     </div>
                   )}
                 </div>
-                <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
+                <div className="control-end flex">
+                  <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
+                </div>
               </div>
             );
           })}
@@ -829,7 +1044,7 @@
       const isToggle = s.type === 'toggle';
       const showDivider = !!s.optional && !isFirst;
       return (
-        <div className="grid gap-3"
+        <div className="shared-flat-row grid gap-3"
           style={{ gridTemplateColumns: '1fr auto',
                    borderTop: showDivider ? '1px solid var(--card-border)' : 'none',
                    marginTop: showDivider ? 6 : 0,
@@ -843,7 +1058,9 @@
               </div>
             )}
           </div>
-          <SettingControl s={s} value={value} onChange={onChangeAll} compact />
+          <div className="control-end flex">
+            <SettingControl s={s} value={value} onChange={onChangeAll} compact />
+          </div>
         </div>
       );
     };
@@ -865,7 +1082,7 @@
             const roleEnabled = !!perRole[r.id]?.[featureId]?.enabled;
             return (
               <div key={r.id}
-                className="role-row grid items-center"
+                className="role-row per-role-row grid items-center"
                 style={{
                   gridTemplateColumns: '160px 1fr',
                   padding: '10px 14px',
@@ -877,7 +1094,7 @@
                     style={{ width: 7, height: 7, background: 'var(--green)', opacity: roleEnabled ? 1 : 0.3 }} />
                   <span className="truncate" title={r.name}>{r.name}</span>
                 </div>
-                <div className="flex justify-end">
+                <div className="control-cell flex justify-end">
                   <SettingControl s={s} value={value} onChange={(v) => onUpdate(r.id, s.id, v)} compact />
                 </div>
               </div>
@@ -929,7 +1146,7 @@
           {/* Panel-level controls strip — slightly darker tint anchors it as a control band,
               and a bottom divider separates it from the individual settings list below.
               When per-role mode is ON, swap to a soft cream tint to signal active state. */}
-          <div className="flex items-center justify-between gap-3 px-8 py-3"
+          <div className="panel-strip multi-panel-strip flex items-center justify-between gap-3 px-8 py-3"
             style={{ background: isPerRole ? '#FFFDF1' : 'var(--row-hover)', borderBottom: '1px solid var(--card-border)' }}>
             <div className="flex flex-col">
               <span className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -954,7 +1171,7 @@
             </div>
           </div>
 
-          <div className="px-8 pt-2 pb-5">
+          <div className="multi-panel-body px-8 pt-2 pb-5">
           {isPerRole ? (() => {
             // In per-role mode, show only ON roles by default. OFF roles can be revealed via
             // the eye toggle above, and when revealed render with a greyed-out indicator
@@ -1013,33 +1230,132 @@
     };
 
     // ===== Matrix Row =====
-    const MatrixRow = ({ feature, roles, perRole, isOpen, onToggleOpen, onToggleEnabled, gridCols, hasSettings }) => (
-      <div className="border-t" style={{ borderColor: 'var(--card-border)' }}>
-        <div onClick={() => hasSettings && onToggleOpen()}
-          className={`feature-row grid items-center${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
-          style={{ gridTemplateColumns: gridCols, padding: '22px 0', cursor: hasSettings ? 'pointer' : 'default',
-            background: isOpen ? 'var(--soft-bg)' : undefined }}>
-          <div className="flex items-center gap-2 pl-6">
-            <span style={{ color: 'var(--text-tertiary)', visibility: hasSettings ? 'visible' : 'hidden',
-              transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}><ChevronRight /></span>
-            {feature.icon && (
-              <span className="flex items-center justify-center" style={{ width: 20, height: 20 }}>
-                <FeatureIcon name={feature.icon} />
-              </span>
-            )}
-            <div className="text-[14px] font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>
-              {feature.name}
+    // Renders one feature in the matrix. On desktop this is a horizontal grid:
+    // feature label on the left + a toggle column for every role.
+    // On mobile we flip it to a stacked card so it fits a narrow viewport: feature header
+    // on top (clickable to expand settings), and each role rendered as a label/toggle row.
+    const MatrixRow = ({ feature, roles, perRole, isOpen, onToggleOpen, onToggleEnabled, gridCols, hasSettings, isMobile, onEditSettings }) => {
+      if (isMobile) {
+        // Mobile no longer expands inline — the "Edit settings" link opens a full-screen modal
+        // so users have a focused space to configure each feature. The role/toggle list still
+        // renders below the feature header so on/off can be flipped without a detour.
+        return (
+          <div className="border-t" style={{ borderColor: 'var(--card-border)' }}>
+            <div className="feature-row-mobile flex items-center gap-2">
+              {feature.icon && (
+                <span className="flex items-center justify-center" style={{ width: 20, height: 20 }}>
+                  <FeatureIcon name={feature.icon} />
+                </span>
+              )}
+              <div className="text-[14px] font-medium leading-tight flex-1" style={{ color: 'var(--text-primary)' }}>
+                {feature.name}
+              </div>
+              {hasSettings && (
+                <button onClick={onEditSettings}
+                  className="text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-md whitespace-nowrap"
+                  style={{ color: 'var(--brand)' }}>
+                  Edit settings
+                </button>
+              )}
+            </div>
+            <div className="px-3 pb-3 pt-1">
+              <div className="rounded-md border bg-white" style={{ borderColor: 'var(--card-border)' }}>
+                {roles.map((r, idx) => (
+                  <div key={r.id}
+                    className="flex items-center justify-between gap-3 px-3 py-2.5"
+                    style={{ borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none' }}>
+                    <span className="text-[11px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-secondary)' }}>
+                      {r.name}
+                    </span>
+                    <Toggle size="sm" checked={!!perRole[r.id]?.[feature.id]?.enabled}
+                      onChange={() => onToggleEnabled(r.id)} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-          {roles.map(r => (
-            <div key={r.id} className="flex justify-center">
-              <Toggle size="sm" checked={!!perRole[r.id]?.[feature.id]?.enabled}
-                onChange={() => onToggleEnabled(r.id)} />
+        );
+      }
+      return (
+        <div className="border-t" style={{ borderColor: 'var(--card-border)' }}>
+          <div onClick={() => hasSettings && onToggleOpen()}
+            className={`feature-row grid items-center${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
+            style={{ gridTemplateColumns: gridCols, padding: '22px 0', cursor: hasSettings ? 'pointer' : 'default',
+              background: isOpen ? 'var(--soft-bg)' : undefined }}>
+            <div className="flex items-center gap-2 pl-6">
+              <span style={{ color: 'var(--text-tertiary)', visibility: hasSettings ? 'visible' : 'hidden',
+                transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}><ChevronRight /></span>
+              {feature.icon && (
+                <span className="flex items-center justify-center" style={{ width: 20, height: 20 }}>
+                  <FeatureIcon name={feature.icon} />
+                </span>
+              )}
+              <div className="text-[14px] font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>
+                {feature.name}
+              </div>
             </div>
-          ))}
+            {roles.map(r => (
+              <div key={r.id} className="flex justify-center">
+                <Toggle size="sm" checked={!!perRole[r.id]?.[feature.id]?.enabled}
+                  onChange={() => onToggleEnabled(r.id)} />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-    );
+      );
+    };
+
+    // ===== Mobile Feature Settings Modal =====
+    // Full-screen sheet that hosts a feature's settings when triggered from the mobile
+    // matrix. Reuses the same Multi/Simple settings blocks so changes flow back through
+    // the existing update callbacks. Body scroll locks while open.
+    const MobileFeatureSettingsModal = ({ feature, roles, perRole, onClose, onUpdate, onUpdateShared, onSetPerRole, onMatchAll }) => {
+      useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+      }, []);
+      const isMultiRole = roles.length > 1;
+      return (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white" role="dialog" aria-modal="true">
+          <header className="flex items-center justify-between px-3 h-14 border-b shrink-0"
+            style={{ borderColor: 'var(--card-border)' }}>
+            <button onClick={onClose} className="p-2 -ml-1 rounded-md" aria-label="Close" style={{ color: 'var(--text-primary)' }}>
+              <CloseIcon size={20} />
+            </button>
+            <div className="flex items-center gap-2 flex-1 justify-center">
+              {feature.icon && (
+                <span className="flex items-center justify-center" style={{ width: 20, height: 20 }}>
+                  <FeatureIcon name={feature.icon} />
+                </span>
+              )}
+              <h2 className="text-[15px] font-extrabold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>
+                {feature.name}
+              </h2>
+            </div>
+            {/* Spacer to balance the close button so the title stays centered */}
+            <div style={{ width: 36 }} />
+          </header>
+          <div className="flex-1 overflow-y-auto" style={{ background: 'var(--soft-bg)' }}>
+            {isMultiRole ? (
+              <MultiRoleSettingsBlock feature={feature} roles={roles} perRole={perRole}
+                onUpdate={onUpdate} onUpdateShared={onUpdateShared}
+                onSetPerRole={onSetPerRole} onMatchAll={onMatchAll} />
+            ) : (
+              <SimpleSettingsBlock feature={feature} role={roles[0]} perRole={perRole}
+                onUpdate={onUpdate} />
+            )}
+          </div>
+          <footer className="border-t bg-white p-3 shrink-0" style={{ borderColor: 'var(--card-border)' }}>
+            <button onClick={onClose}
+              className="w-full text-[12px] font-bold tracking-wider px-4 py-3 rounded-md text-white"
+              style={{ background: 'var(--brand)' }}>
+              DONE
+            </button>
+          </footer>
+        </div>
+      );
+    };
 
     // ===== Contacts view =====
     const InfoCircle = ({ size = 13 }) => (
@@ -1055,7 +1371,30 @@
       </svg>
     );
 
-    const ContactsView = ({ contacts, roles, onAdd, onRemoveContact }) => {
+    // Mobile section nav — replaces the inner sidebar on small screens.
+    const MobileSectionNav = ({ activeSection, onSelectSection, contactsCount }) => (
+      <div className="mobile-section-nav mobile-only mb-4 rounded-md p-1 bg-white border" style={{ borderColor: 'var(--card-border)' }}>
+        {[
+          { id: 'features', label: 'Gallery Features' },
+          { id: 'contacts', label: `Contacts (${contactsCount})` },
+        ].map(item => {
+          const active = activeSection === item.id;
+          return (
+            <button key={item.id} onClick={() => onSelectSection(item.id)}
+              className="flex-1 text-[11px] font-bold tracking-wider uppercase py-2 rounded transition-colors"
+              style={{
+                background: active ? 'var(--brand-cream)' : 'transparent',
+                color: active ? 'var(--brand)' : 'var(--text-secondary)',
+              }}>
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+
+    const ContactsView = ({ contacts, roles, onAdd, onRemoveContact, activeSection, onSelectSection }) => {
+      const isMobile = useIsMobile();
       const [first, setFirst] = useState('');
       const [last, setLast] = useState('');
       const [email, setEmail] = useState('');
@@ -1098,8 +1437,10 @@
       );
 
       return (
-        <main className="flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 920 }}>
-          <h1 className="text-[18px] font-extrabold tracking-tight uppercase mb-4" style={{ color: 'var(--text-primary)', letterSpacing: '0.02em' }}>Contacts</h1>
+        <main className="main-pane flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 920 }}>
+          <MobileSectionNav activeSection={activeSection}
+            onSelectSection={onSelectSection} contactsCount={contacts.length} />
+          <h1 className="features-header-h1 text-[18px] font-extrabold tracking-tight uppercase mb-4" style={{ color: 'var(--text-primary)', letterSpacing: '0.02em' }}>Contacts</h1>
 
           {/* Sub-tabs */}
           <div className="flex items-center gap-6 border-b mb-5" style={{ borderColor: 'var(--card-border)' }}>
@@ -1131,7 +1472,7 @@
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="contacts-form-grid grid grid-cols-2 gap-3 mb-3">
                 <input value={first} onChange={e => setFirst(e.target.value)} placeholder="First Name"
                   className="text-[13px] px-3 py-2.5 rounded-md border bg-white outline-none"
                   style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)' }} />
@@ -1151,7 +1492,7 @@
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 mb-6 flex-wrap relative">
+              <div className="contacts-add-buttons flex items-center gap-3 mb-6 flex-wrap relative">
                 <SolidBtn onClick={() => submit(everyone?.id)} disabled={!canAdd}>ADD</SolidBtn>
                 {inlineRoles.map(r => (
                   <SolidBtn key={r.id} onClick={() => submit(r.id)} disabled={!canAdd}>
@@ -1186,52 +1527,89 @@
             </>
           )}
 
-          {/* Contacts table */}
+          {/* Contacts table — desktop grid / mobile card list */}
           <div className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: 'var(--card-border)' }}>
-            <div className="grid items-center text-[11px] font-bold tracking-wider uppercase"
-              style={{ gridTemplateColumns: '40px 1.2fr 1.2fr 2fr 1fr 1.2fr 1fr 40px',
-                       padding: '12px 16px', color: 'var(--text-secondary)',
-                       borderBottom: '1px solid var(--card-border)' }}>
-              <span><input type="checkbox" /></span>
-              <span>First Name</span>
-              <span>Last Name</span>
-              <span>Email</span>
-              <span>Mobile</span>
-              <span>Role</span>
-              <span>Reg Info</span>
-              <span style={{ color: 'var(--text-tertiary)' }}><GearIcon /></span>
-            </div>
-            {contacts.length === 0 ? (
-              <div className="text-[13px] text-center py-10" style={{ color: 'var(--text-tertiary)' }}>
-                No contacts yet. Add one above.
-              </div>
-            ) : contacts.map(c => {
-              const r = roles.find(rr => rr.id === c.roleId);
-              return (
-                <div key={c.id} className="grid items-center text-[13px]"
-                  style={{ gridTemplateColumns: '40px 1.2fr 1.2fr 2fr 1fr 1.2fr 1fr 40px',
-                           padding: '14px 16px', borderTop: '1px solid var(--card-border)',
-                           color: 'var(--text-primary)' }}>
-                  <span><input type="checkbox" /></span>
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--text-tertiary)' }} />
-                    <span className="truncate">{c.first || '-'}</span>
-                  </span>
-                  <span className="truncate">{c.last || '-'}</span>
-                  <span className="truncate" title={c.email}>{c.email}</span>
-                  <span style={{ color: 'var(--text-secondary)' }}>{c.mobile || '-'}</span>
-                  <span className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>
-                    <span style={{ color: 'var(--text-tertiary)' }}><InfoCircle /></span>
-                    <span className="truncate">{r ? r.name : '—'}</span>
-                  </span>
-                  <span style={{ color: 'var(--text-tertiary)' }}>-</span>
-                  <button onClick={() => onRemoveContact(c.id)} className="kebab-btn rounded p-1 justify-self-center"
-                    style={{ color: 'var(--text-tertiary)' }} title="Remove">
-                    <KebabIcon size={14} />
-                  </button>
+            {isMobile ? (
+              contacts.length === 0 ? (
+                <div className="text-[13px] text-center py-10" style={{ color: 'var(--text-tertiary)' }}>
+                  No contacts yet. Add one above.
                 </div>
-              );
-            })}
+              ) : contacts.map((c, idx) => {
+                const r = roles.find(rr => rr.id === c.roleId);
+                return (
+                  <div key={c.id} className="px-4 py-3" style={{ borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none' }}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[14px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {(c.first || c.last) ? `${c.first || ''} ${c.last || ''}`.trim() : c.email}
+                        </span>
+                        <span className="text-[12px] truncate" style={{ color: 'var(--text-secondary)' }}>{c.email}</span>
+                      </div>
+                      <button onClick={() => onRemoveContact(c.id)} className="kebab-btn rounded p-1 shrink-0"
+                        style={{ color: 'var(--text-tertiary)' }} title="Remove">
+                        <KebabIcon size={14} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] mt-1.5 flex-wrap">
+                      {c.mobile && (
+                        <span style={{ color: 'var(--text-secondary)' }}>{c.mobile}</span>
+                      )}
+                      <span className="inline-flex items-center gap-1 font-bold tracking-wider uppercase rounded px-2 py-0.5"
+                        style={{ background: 'var(--brand-cream)', color: 'var(--brand)' }}>
+                        {r ? r.name : '—'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <>
+                <div className="grid items-center text-[11px] font-bold tracking-wider uppercase"
+                  style={{ gridTemplateColumns: '40px 1.2fr 1.2fr 2fr 1fr 1.2fr 1fr 40px',
+                           padding: '12px 16px', color: 'var(--text-secondary)',
+                           borderBottom: '1px solid var(--card-border)' }}>
+                  <span><input type="checkbox" /></span>
+                  <span>First Name</span>
+                  <span>Last Name</span>
+                  <span>Email</span>
+                  <span>Mobile</span>
+                  <span>Role</span>
+                  <span>Reg Info</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}><GearIcon /></span>
+                </div>
+                {contacts.length === 0 ? (
+                  <div className="text-[13px] text-center py-10" style={{ color: 'var(--text-tertiary)' }}>
+                    No contacts yet. Add one above.
+                  </div>
+                ) : contacts.map(c => {
+                  const r = roles.find(rr => rr.id === c.roleId);
+                  return (
+                    <div key={c.id} className="grid items-center text-[13px]"
+                      style={{ gridTemplateColumns: '40px 1.2fr 1.2fr 2fr 1fr 1.2fr 1fr 40px',
+                               padding: '14px 16px', borderTop: '1px solid var(--card-border)',
+                               color: 'var(--text-primary)' }}>
+                      <span><input type="checkbox" /></span>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--text-tertiary)' }} />
+                        <span className="truncate">{c.first || '-'}</span>
+                      </span>
+                      <span className="truncate">{c.last || '-'}</span>
+                      <span className="truncate" title={c.email}>{c.email}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{c.mobile || '-'}</span>
+                      <span className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>
+                        <span style={{ color: 'var(--text-tertiary)' }}><InfoCircle /></span>
+                        <span className="truncate">{r ? r.name : '—'}</span>
+                      </span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>-</span>
+                      <button onClick={() => onRemoveContact(c.id)} className="kebab-btn rounded p-1 justify-self-center"
+                        style={{ color: 'var(--text-tertiary)' }} title="Remove">
+                        <KebabIcon size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
 
           <div className="flex items-center justify-between mt-4">
@@ -1249,6 +1627,7 @@
 
     // ===== App =====
     function App() {
+      const isMobile = useIsMobile();
       const [roles, setRoles] = useState([{ id: 'everyone', name: 'Everyone', removable: false }]);
       const [perRole, setPerRole] = useState({ everyone: buildEveryoneState() });
       const [features, setFeatures] = useState(initialFeatures);
@@ -1260,6 +1639,7 @@
       const [toast, setToast] = useState(null);
       const [contacts, setContacts] = useState([]);
       const [activeSection, setActiveSection] = useState('features'); // 'features' | 'contacts'
+      const [mobileEditFeatureId, setMobileEditFeatureId] = useState(null);
 
       const addContact = (c) => {
         const id = `contact-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1269,13 +1649,15 @@
       };
       const removeContact = (id) => setContacts(prev => prev.filter(c => c.id !== id));
 
-      // click outside to close menu
+      // Click-outside-to-close for the desktop kebab dropdown only.
+      // Mobile uses a bottom-sheet whose backdrop handles closing, and a document-level
+      // click listener would race with the open-pill click and immediately re-close it.
       useEffect(() => {
-        if (!openMenuRoleId) return;
+        if (!openMenuRoleId || isMobile) return;
         const handler = () => setOpenMenuRoleId(null);
         document.addEventListener('click', handler);
         return () => document.removeEventListener('click', handler);
-      }, [openMenuRoleId]);
+      }, [openMenuRoleId, isMobile]);
 
       const showToast = (msg) => {
         setToast(msg);
@@ -1428,18 +1810,21 @@
             <div className="flex-1 flex flex-col bg-white border-l" style={{ borderColor: 'var(--card-border)' }}>
               <GalleryHeader />
               <Tabs />
-              <div className="flex flex-1" style={{ background: '#fff' }}>
+              <div className="layout-pane flex flex-1" style={{ background: '#fff' }}>
                 <InnerSidebar features={features} roles={roles} perRole={perRole}
                   activeSection={activeSection} onSelectSection={setActiveSection}
                   contacts={contacts} />
                 {activeSection === 'contacts' ? (
                   <ContactsView contacts={contacts} roles={roles}
-                    onAdd={addContact} onRemoveContact={removeContact} />
+                    onAdd={addContact} onRemoveContact={removeContact}
+                    activeSection={activeSection} onSelectSection={setActiveSection} />
                 ) : (
-                <main className="flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 920 }}>
-                  <header className="mb-4 flex items-start justify-between gap-4">
+                <main className="main-pane flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 920 }}>
+                  <MobileSectionNav activeSection={activeSection}
+                    onSelectSection={setActiveSection} contactsCount={contacts.length} />
+                  <header className="gallery-features-header mb-4 flex items-start justify-between gap-4">
                     <div>
-                      <h1 className="text-[18px] font-extrabold tracking-tight uppercase" style={{ color: 'var(--brand)', letterSpacing: '0.02em' }}>Gallery Features</h1>
+                      <h1 className="features-header-h1 text-[18px] font-extrabold tracking-tight uppercase" style={{ color: 'var(--brand)', letterSpacing: '0.02em' }}>Gallery Features</h1>
                       <p className="text-[13px] mt-1" style={{ color: 'var(--text-secondary)' }}>Control the social features options for this gallery.</p>
                     </div>
                     <button onClick={() => setShowModal(true)}
@@ -1448,27 +1833,66 @@
                     </button>
                   </header>
 
-                  <div className="bg-white rounded-xl border" style={{ borderColor: 'var(--card-border)' }}>
-                    {/* Header row */}
-                    <div className="grid items-center" style={{ gridTemplateColumns: gridCols, padding: '14px 0',
-                      background: 'var(--soft-bg)', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
-                      <div className="pl-6 text-[13px]" style={{ color: 'var(--text-secondary)' }}>Feature</div>
+                  {/* Mobile-only role strip — replaces the desktop column header so users can
+                      still see roles, their counts, and access rename/duplicate/remove menus. */}
+                  {isMobile && (
+                    <div className="mobile-only mb-3 flex items-center gap-2 overflow-x-auto pb-1"
+                      style={{ WebkitOverflowScrolling: 'touch' }}>
                       {roles.map(r => (
-                        <ColumnHeader key={r.id} role={r}
-                          contactCount={contacts.filter(c => c.roleId === r.id).length}
-                          isMenuOpen={openMenuRoleId === r.id}
-                          onMenuToggle={() => setOpenMenuRoleId(openMenuRoleId === r.id ? null : r.id)}
-                          isRenaming={renamingRoleId === r.id}
-                          onCommitRename={(name) => renameRole(r.id, name)}
-                          onCancelRename={() => setRenamingRoleId(null)}
-                          onRename={() => { setRenamingRoleId(r.id); setOpenMenuRoleId(null); }}
-                          onDuplicate={() => { duplicateRole(r.id); setOpenMenuRoleId(null); }}
-                          onRemove={() => { removeRole(r.id); setOpenMenuRoleId(null); }}
-                          onSaveLater={() => { showToast(`"${r.name}" saved for later use`); setOpenMenuRoleId(null); }}
-                          onAddContact={() => setContactRoleId(r.id)}
-                        />
+                        <button key={r.id} type="button"
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuRoleId(r.id); }}
+                          className="relative flex items-center rounded-full border bg-white px-3 py-1.5 whitespace-nowrap shrink-0 text-[11px] font-bold uppercase tracking-wider"
+                          style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
+                          {r.name}
+                          <span className="ml-1" style={{ color: 'var(--text-tertiary)', fontWeight: 600 }}>({contacts.filter(c => c.roleId === r.id).length})</span>
+                        </button>
                       ))}
                     </div>
+                  )}
+                  {/* Mobile bottom-sheet for role actions — replaces the cramped dropdown. */}
+                  {isMobile && openMenuRoleId && (() => {
+                    const r = roles.find(x => x.id === openMenuRoleId);
+                    if (!r) return null;
+                    return (
+                      <RoleActionsSheet
+                        role={r}
+                        onClose={() => setOpenMenuRoleId(null)}
+                        onAddContact={() => { setOpenMenuRoleId(null); setContactRoleId(r.id); }}
+                        onRename={() => {
+                          setOpenMenuRoleId(null);
+                          const next = window.prompt('Rename role', r.name);
+                          if (next != null) renameRole(r.id, next);
+                        }}
+                        onSaveLater={() => { showToast(`"${r.name}" saved for later use`); setOpenMenuRoleId(null); }}
+                        onDuplicate={() => { duplicateRole(r.id); setOpenMenuRoleId(null); }}
+                        onRemove={() => { removeRole(r.id); setOpenMenuRoleId(null); }}
+                      />
+                    );
+                  })()}
+
+                  <div className="bg-white rounded-xl border" style={{ borderColor: 'var(--card-border)' }}>
+                    {/* Header row — desktop only; mobile uses the role strip above + per-feature stacked rows. */}
+                    {!isMobile && (
+                      <div className="grid items-center" style={{ gridTemplateColumns: gridCols, padding: '14px 0',
+                        background: 'var(--soft-bg)', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+                        <div className="pl-6 text-[13px]" style={{ color: 'var(--text-secondary)' }}>Feature</div>
+                        {roles.map(r => (
+                          <ColumnHeader key={r.id} role={r}
+                            contactCount={contacts.filter(c => c.roleId === r.id).length}
+                            isMenuOpen={openMenuRoleId === r.id}
+                            onMenuToggle={() => setOpenMenuRoleId(openMenuRoleId === r.id ? null : r.id)}
+                            isRenaming={renamingRoleId === r.id}
+                            onCommitRename={(name) => renameRole(r.id, name)}
+                            onCancelRename={() => setRenamingRoleId(null)}
+                            onRename={() => { setRenamingRoleId(r.id); setOpenMenuRoleId(null); }}
+                            onDuplicate={() => { duplicateRole(r.id); setOpenMenuRoleId(null); }}
+                            onRemove={() => { removeRole(r.id); setOpenMenuRoleId(null); }}
+                            onSaveLater={() => { showToast(`"${r.name}" saved for later use`); setOpenMenuRoleId(null); }}
+                            onAddContact={() => setContactRoleId(r.id)}
+                          />
+                        ))}
+                      </div>
+                    )}
 
                     {features.map(feature => {
                       const hasSettings = feature.settings.length > 0;
@@ -1480,9 +1904,12 @@
                             feature={feature} roles={roles} perRole={perRole}
                             isOpen={isOpen} onToggleOpen={() => toggleOpen(feature.id)}
                             onToggleEnabled={(rId) => toggleEnabled(feature.id, rId)}
-                            gridCols={gridCols} hasSettings={hasSettings}
+                            gridCols={gridCols} hasSettings={hasSettings} isMobile={isMobile}
+                            onEditSettings={() => setMobileEditFeatureId(feature.id)}
                           />
-                          {isOpen && hasSettings && (
+                          {/* Inline settings panel only on desktop. On mobile, settings open
+                              in MobileFeatureSettingsModal triggered by the Edit settings button. */}
+                          {!isMobile && isOpen && hasSettings && (
                             isMultiRole ? (
                               <MultiRoleSettingsBlock
                                 feature={feature} roles={roles} perRole={perRole}
@@ -1519,6 +1946,20 @@
                 role={r}
                 onClose={() => setContactRoleId(null)}
                 onAdd={(c) => addContact({ ...c, roleId: r.id })} />
+            );
+          })()}
+
+          {mobileEditFeatureId && (() => {
+            const feature = features.find(f => f.id === mobileEditFeatureId);
+            if (!feature) return null;
+            return (
+              <MobileFeatureSettingsModal
+                feature={feature} roles={roles} perRole={perRole}
+                onClose={() => setMobileEditFeatureId(null)}
+                onUpdate={(rId, sId, v) => updateValue(feature.id, rId, sId, v)}
+                onUpdateShared={(sId, v) => updateSharedValue(feature.id, sId, v)}
+                onSetPerRole={() => setPerRoleMode(feature.id)}
+                onMatchAll={() => matchAllAcrossRoles(feature.id)} />
             );
           })()}
 
