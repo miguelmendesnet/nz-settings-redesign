@@ -94,6 +94,10 @@
     }
     .role-row.is-off { opacity: 0.55; }
 
+    /* Per-role rows have a uniform height on desktop so cells line up regardless
+       of which control (dropdown vs. checkboxes vs. toggle) they contain. */
+    .per-role-row { min-height: 55px; }
+
     /* ============ Mobile responsive (<= 768px) ============ */
     .mobile-only { display: none; }
     .gallery-header-mobile { display: none; }
@@ -146,6 +150,7 @@
         grid-template-columns: 1fr !important;
         gap: 8px !important;
         padding: 12px !important;
+        min-height: 0 !important;
       }
       .per-role-row .control-cell { justify-content: flex-start !important; }
       .per-role-row select { width: 100% !important; min-width: 0 !important; }
