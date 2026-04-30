@@ -1171,8 +1171,16 @@
                   <span>{showOffRoles ? `Hide off roles` : `Show off roles (${offRolesCount})`}</span>
                 </button>
               )}
-              <Toggle size="sm" checked={isPerRole}
-                onChange={() => isPerRole ? onMatchAll() : onSetPerRole()} />
+              <button type="button"
+                onClick={() => isPerRole ? onMatchAll() : onSetPerRole()}
+                className="text-[11px] font-bold tracking-wider px-3 py-1.5 rounded-md border whitespace-nowrap transition-colors"
+                style={{
+                  borderColor: isPerRole ? 'var(--card-border)' : 'var(--brand)',
+                  color: isPerRole ? 'var(--text-primary)' : 'var(--brand)',
+                  background: isPerRole ? '#FFFFFF' : '#FFF1E5',
+                }}>
+                {isPerRole ? 'MATCH ACROSS ROLES' : 'SET PER ROLE'}
+              </button>
             </div>
           </div>
 
@@ -1799,9 +1807,13 @@
       };
 
       const toggleOpen = (fId) => {
-        // Only one feature accordion may be open at a time:
-        // if the clicked one is already open, close it; otherwise replace the set with just this one.
-        setOpenFeatures(openFeatures.has(fId) ? new Set() : new Set([fId]));
+        // Multiple feature accordions can be open simultaneously. Toggle just the
+        // clicked one without affecting others.
+        setOpenFeatures(prev => {
+          const next = new Set(prev);
+          if (next.has(fId)) next.delete(fId); else next.add(fId);
+          return next;
+        });
       };
 
       const existingNames = roles.map(r => r.name.toLowerCase());
