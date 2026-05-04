@@ -295,14 +295,16 @@
             placeholder: 'e.g. 5', def: 5, min: 1,
             dependsOn: { settingId: 'video-download-type', values: ['Specific Amount'] } },
           { id: 'video-resolutions', type: 'multicheck', label: 'Video Download Resolutions',
-            options: ['Original','1080p Full HD'], def: ['Original'] },
+            options: ['Original','1080p Full HD'], def: ['Original'],
+            dependsOn: { settingId: 'video-download-type', values: ['All Videos', 'Specific Amount'] } },
         ],
       },
       { id: 'keyword-search', name: 'Keyword Search',
         settings: [
           { id: 'placeholder', type: 'text', label: 'Search bar placeholder',
             def: 'Search the contents of this gallery…' },
-          { id: 'collapse', type: 'check', label: 'Collapse on page load', def: true, on: 'Enabled' },
+          { id: 'collapse', type: 'check', label: 'Collapse on page load', def: true, on: 'Enabled',
+            dependsOn: { settingId: 'placeholder' } },
         ],
       },
       { id: 'favorites', name: 'Favorites', settings: [] },
@@ -351,12 +353,90 @@
     // (e.g. Gallery Allowed Resolutions only matters when Download Type = Full Gallery + Individual).
     const isSettingVisibleForRole = (setting, roleId, featureId, perRole) => {
       if (!setting.dependsOn) return true;
-      const depVal = perRole[roleId]?.[featureId]?.values?.[setting.dependsOn.settingId];
       const dep = setting.dependsOn;
       const allowed = Array.isArray(dep.values)
         ? dep.values
-        : (dep.value !== undefined ? [dep.value] : []);
+        : (dep.value !== undefined ? [dep.value] : null);
+      // dependsOn without a value constraint is purely structural — used so the child
+      // setting nests under its parent in the rendered UI without affecting visibility.
+      if (allowed === null) return true;
+      const depVal = perRole[roleId]?.[featureId]?.values?.[dep.settingId];
       return allowed.includes(depVal);
+    };
+
+    // ===== Per-role summary helper =====
+    // Generates a short, human-readable summary of how a feature is configured for a
+    // given role (e.g. "10 images · Original"), so the matrix shows context — not just
+    // ON/OFF — when guests and clients have different limits or resolutions.
+    const SHORT_SELECT_LABELS = {
+      'Full Gallery & Individual Download': 'Full + Individual',
+      'Full Gallery Download': 'Full gallery',
+      'Specific Amount Download': 'Limited',
+      'Individual Download Only': 'Individual only',
+      'All Videos': 'All videos',
+      'Specific Amount': 'Limited',
+    };
+    // Per-feature verb phrases for the dynamic status sentences shown under each feature title.
+    // Each feature defines an "on with summary" prefix, an "on without summary" fallback,
+    // and a negative phrase used when the feature is off for the role group.
+    const FEATURE_VERBS = {
+      'photo-downloads': { onWith: 'can download', onBare: 'can download photos', off: 'cannot download photos' },
+      'video-downloads': { onWith: 'can download videos:', onBare: 'can download videos', off: 'cannot download videos' },
+      'keyword-search':  { onWith: 'can search by keyword', onBare: 'can search by keyword', off: 'cannot search by keyword' },
+      'favorites':       { onWith: 'can mark favorites', onBare: 'can mark favorites', off: 'cannot use favorites' },
+      'commenting':      { onWith: 'can comment',       onBare: 'can comment',         off: 'cannot comment' },
+      'sharing':         { onWith: 'can share',         onBare: 'can share',           off: 'cannot share' },
+      'face-finder':     { onWith: 'can use Face Finder', onBare: 'can use Face Finder', off: 'cannot use Face Finder' },
+    };
+    const joinNames = (names) => {
+      if (names.length === 0) return '';
+      if (names.length === 1) return names[0];
+      if (names.length === 2) return `${names[0]} & ${names[1]}`;
+      return names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1];
+    };
+    // Build grouped human-readable status lines for a feature. Roles with the same effective
+    // configuration collapse into one sentence — e.g. "Everyone & Client can download Full + Individual".
+    // Only positive (enabled) groups are listed; off-roles are inferred from their unticked toggle.
+    const buildFeatureStatusLines = (feature, roles, perRole) => {
+      const groups = new Map();
+      roles.forEach(r => {
+        const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
+        if (!enabled) return;
+        const summary = summarizeFeatureForRole(feature, r.id, perRole);
+        const key = `on:${summary}`;
+        if (!groups.has(key)) groups.set(key, { summary, names: [] });
+        groups.get(key).names.push(r.name);
+      });
+      const verbs = FEATURE_VERBS[feature.id] || { onWith: 'can use', onBare: 'can use' };
+      const ordered = Array.from(groups.values()).sort((a, b) => (a.summary ? 0 : 1) - (b.summary ? 0 : 1));
+      return ordered.map(g => {
+        const names = joinNames(g.names);
+        return g.summary ? `${names} ${verbs.onWith} ${g.summary}` : `${names} ${verbs.onBare}`;
+      });
+    };
+
+    const summarizeFeatureForRole = (feature, roleId, perRole) => {
+      const data = perRole[roleId]?.[feature.id];
+      if (!data || !data.enabled) return '';
+      const values = data.values || {};
+      const parts = [];
+      feature.settings.forEach(s => {
+        if (s.optional) return;
+        if (s.type === 'multicheck') return; // skip resolutions/multi-check lists from the summary
+        if (/resolution/i.test(s.id) || /resolution/i.test(s.label || '')) return; // skip any resolution setting
+        if (!isSettingVisibleForRole(s, roleId, feature.id, perRole)) return;
+        const v = values[s.id];
+        if (v === undefined || v === null || v === '') return;
+        if (s.type === 'select') {
+          parts.push(SHORT_SELECT_LABELS[v] || v);
+        } else if (s.type === 'number') {
+          const unit = s.id.includes('video') ? 'videos' : 'images';
+          parts.push(`${v} ${unit}`);
+        } else if (s.type === 'toggle') {
+          if (v) parts.push(s.label.replace(/\s*\(OPTIONAL\)\s*/i, ''));
+        }
+      });
+      return parts.join(' · ');
     };
 
     // ===== Toggle =====
@@ -494,15 +574,63 @@
       <span className="inline-flex items-center text-[10px] font-bold tracking-wider uppercase rounded-md px-2 py-1"
         style={{ background: 'var(--brand)', color: '#fff' }}>{children}</span>
     );
-    const StatusPill = ({ on }) => (
-      <span className="inline-flex items-center justify-center text-[9px] font-bold rounded px-1.5 py-0.5 mr-2"
-        style={{ background: on ? 'var(--brand)' : 'var(--off-bg)', color: on ? '#fff' : 'var(--off-text)', minWidth: 26, letterSpacing: '0.05em' }}>
-        {on ? 'ON' : 'OFF'}
-      </span>
-    );
+    // Three-state status pill — back to the static rectangular look, but with a partially
+    // filled background for the "some" state so the proportion of roles enabled shows visually.
+    //   state='all'   → solid brand pill, white "ON"
+    //   state='some'  → cream pill with an orange fill from the left sized to the fraction,
+    //                   orange border, white "ON" sitting on the filled portion
+    //   state='none'  → grey "OFF"
+    // Accepts a legacy `on` prop for callers that don't track per-role state.
+    const StatusPill = ({ on, state, fraction }) => {
+      const s = state || (on ? 'all' : 'none');
+      const base = "inline-flex items-center text-[9px] font-bold rounded mr-2";
+      const common = { minWidth: 36, letterSpacing: '0.05em', boxSizing: 'border-box' };
+      if (s === 'all') {
+        return (
+          <span className={base + " justify-center"}
+            style={{ ...common, background: 'var(--brand)', color: '#fff', padding: '2px 6px' }}
+            title="On for all roles">ON</span>
+        );
+      }
+      if (s === 'some') {
+        // Single visual for any partial state — always render a 67% orange fill so
+        // "partial" is unambiguously distinguishable from "all on" without needing
+        // to encode the precise fraction. Tooltip still reports the exact count.
+        return (
+          <span className={base + " justify-start"}
+            style={{
+              ...common,
+              position: 'relative',
+              overflow: 'hidden',
+              background: 'var(--brand-cream)',
+              color: '#fff',
+              border: '1px solid var(--brand)',
+              padding: '1px 5px',
+            }}
+            title={`On for ${fraction} roles`}>
+            <span aria-hidden="true" style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0,
+              width: '67%',
+              background: 'var(--brand)',
+            }} />
+            <span style={{ position: 'relative', zIndex: 1 }}>ON</span>
+          </span>
+        );
+      }
+      return (
+        <span className={base + " justify-center"}
+          style={{ ...common, background: 'var(--off-bg)', color: 'var(--off-text)', padding: '2px 6px' }}
+          title="Off for all roles">OFF</span>
+      );
+    };
 
     const InnerSidebar = ({ features, roles, perRole, activeSection, onSelectSection, contacts = [] }) => {
-      const isOnAny = (fId) => roles.some(r => perRole[r.id]?.[fId]?.enabled);
+      const featureStatus = (fId) => {
+        const onCount = roles.filter(r => perRole[r.id]?.[fId]?.enabled).length;
+        if (onCount === 0) return { state: 'none' };
+        if (onCount === roles.length) return { state: 'all' };
+        return { state: 'some', fraction: `${onCount}/${roles.length}` };
+      };
       const isFeatures = activeSection === 'features';
       const isContacts = activeSection === 'contacts';
       const contactsCount = contacts.length;
@@ -527,7 +655,7 @@
             <ul className="pl-1 space-y-1">
               {features.map(f => (
                 <li key={f.id} className="flex items-center text-[12px]" style={{ color: 'var(--text-primary)' }}>
-                  <StatusPill on={isOnAny(f.id)} />{f.name}
+                  <StatusPill {...featureStatus(f.id)} />{f.name}
                 </li>
               ))}
             </ul>
@@ -1006,35 +1134,59 @@
 
     // ===== Settings panels =====
     // Single-role flat settings (no Set per role, no diff)
+    // Children of dependent settings are rendered inline as indented sub-rows directly under
+    // the parent setting they belong to.
     const SimpleSettingsBlock = ({ feature, role, perRole, onUpdate }) => {
       const visibleSettings = feature.settings.filter(s => isSettingVisibleForRole(s, role.id, feature.id, perRole));
+      const topLevel = visibleSettings.filter(s => !s.dependsOn);
+      const childrenOf = (id) => visibleSettings.filter(s => s.dependsOn?.settingId === id);
       return (
         <div className="multi-panel-body px-8 py-2" style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
-          {visibleSettings.map((s, i) => {
+          {topLevel.map((s, i) => {
             const isToggle = s.type === 'toggle';
-            // Only draw a divider above optional sections (e.g. the license agreement at the bottom).
+            const kids = childrenOf(s.id);
             const showDivider = !!s.optional && i !== 0;
             return (
               <div key={s.id}
-                className="shared-flat-row grid items-center gap-4"
                 style={{
-                  gridTemplateColumns: '1fr auto',
                   borderTop: showDivider ? '1px solid var(--card-border)' : 'none',
                   marginTop: showDivider ? 6 : 0,
-                  padding: '14px 0',
-                  alignItems: isToggle ? 'flex-start' : 'center',
                 }}>
-                <div>
-                  <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
-                  {s.meta && (
-                    <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
-                      {s.meta}
+                <div className="shared-flat-row grid items-center gap-4"
+                  style={{
+                    gridTemplateColumns: '1fr auto',
+                    padding: '14px 0',
+                    alignItems: isToggle ? 'flex-start' : 'center',
+                  }}>
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
+                    {s.meta && (
+                      <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
+                        {s.meta}
+                      </div>
+                    )}
+                  </div>
+                  <div className="control-end flex">
+                    <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
+                  </div>
+                </div>
+                {kids.map(c => (
+                  <div key={c.id}
+                    className="shared-flat-row grid items-center gap-4"
+                    style={{
+                      gridTemplateColumns: '1fr auto',
+                      padding: '6px 0 12px 22px',
+                      marginTop: -8,
+                    }}>
+                    <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                      <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
+                      <span>{c.label}</span>
                     </div>
-                  )}
-                </div>
-                <div className="control-end flex">
-                  <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
-                </div>
+                    <div className="control-end flex">
+                      <SettingControl s={c} value={perRole[role.id]?.[feature.id]?.values?.[c.id]} onChange={(v) => onUpdate(role.id, c.id, v)} compact />
+                    </div>
+                  </div>
+                ))}
               </div>
             );
           })}
@@ -1044,36 +1196,60 @@
 
     // Multi-role: shared row — single value applied to all roles. No per-row Set per role
     // (Set per role is now a feature-level button at the top of the panel).
-    const SharedRowFlat = ({ s, value, onChangeAll, isFirst }) => {
+    // Visible child settings (passed in `children`) render as indented sub-rows directly
+    // attached to the parent so users don't have to scan further down for the dependent input.
+    const SharedRowFlat = ({ s, value, onChangeAll, isFirst, children = [], childValues = {}, onChildShared }) => {
       const isToggle = s.type === 'toggle';
       const showDivider = !!s.optional && !isFirst;
       return (
-        <div className="shared-flat-row grid gap-3"
-          style={{ gridTemplateColumns: '1fr auto',
-                   borderTop: showDivider ? '1px solid var(--card-border)' : 'none',
-                   marginTop: showDivider ? 6 : 0,
-                   padding: '14px 0',
-                   alignItems: isToggle ? 'flex-start' : 'center' }}>
-          <div>
-            <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
-            {s.meta && (
-              <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
-                {s.meta}
+        <div style={{
+          borderTop: showDivider ? '1px solid var(--card-border)' : 'none',
+          marginTop: showDivider ? 6 : 0,
+        }}>
+          <div className="shared-flat-row grid gap-3"
+            style={{ gridTemplateColumns: '1fr auto',
+                     padding: '14px 0',
+                     alignItems: isToggle ? 'flex-start' : 'center' }}>
+            <div>
+              <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
+              {s.meta && (
+                <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
+                  {s.meta}
+                </div>
+              )}
+            </div>
+            <div className="control-end flex">
+              <SettingControl s={s} value={value} onChange={onChangeAll} compact />
+            </div>
+          </div>
+          {children.map(c => (
+            <div key={c.id}
+              className="shared-flat-row grid gap-3"
+              style={{
+                gridTemplateColumns: '1fr auto',
+                padding: '6px 0 12px 22px',
+                marginTop: -8,
+                alignItems: 'center',
+              }}>
+              <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
+                <span>{c.label}</span>
               </div>
-            )}
-          </div>
-          <div className="control-end flex">
-            <SettingControl s={s} value={value} onChange={onChangeAll} compact />
-          </div>
+              <div className="control-end flex">
+                <SettingControl s={c} value={childValues[c.id]} onChange={(v) => onChildShared && onChildShared(c.id, v)} compact />
+              </div>
+            </div>
+          ))}
         </div>
       );
     };
 
     // Per-role stack for a single setting. Shows ALL roles (even those with the feature off)
     // so users can adjust their settings; OFF roles render with a greyed-out indicator.
-    // Layout reads as a small table: setting label as a section header, role rows separated
-    // by hairline dividers, controls right-aligned on a consistent column.
-    const PerRoleGroup = ({ s, visibleRoles, perRole, featureId, onUpdate, isFirst }) => (
+    // Dependent settings (passed as `childSettings`) are rendered inline as indented sub-rows
+    // tucked under the role they apply to, so a "Number of images allowed" input appears
+    // immediately below the row whose dropdown selected "Specific Amount Download".
+    const PerRoleGroup = ({ s, visibleRoles, perRole, featureId, onUpdate, isFirst, childSettings = [] }) => (
       <div style={{
         borderTop: !isFirst ? '1px solid var(--card-border)' : 'none',
         paddingTop: isFirst ? 14 : 18,
@@ -1084,24 +1260,47 @@
           {visibleRoles.map((r, idx) => {
             const value = perRole[r.id]?.[featureId]?.values?.[s.id];
             const roleEnabled = !!perRole[r.id]?.[featureId]?.enabled;
+            const visibleChildren = childSettings.filter(c => isSettingVisibleForRole(c, r.id, featureId, perRole));
             return (
-              <div key={r.id}
-                className="role-row per-role-row grid items-center"
-                style={{
-                  gridTemplateColumns: '160px 1fr',
-                  padding: '10px 14px',
-                  borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none',
-                  background: '#fff',
-                }}>
-                <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="rounded-full shrink-0"
-                    style={{ width: 7, height: 7, background: 'var(--green)', opacity: roleEnabled ? 1 : 0.3 }} />
-                  <span className="truncate" title={r.name}>{r.name}</span>
+              <React.Fragment key={r.id}>
+                <div
+                  className="role-row per-role-row grid items-center"
+                  style={{
+                    gridTemplateColumns: '160px 1fr',
+                    padding: '10px 14px',
+                    borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none',
+                    background: '#fff',
+                  }}>
+                  <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="rounded-full shrink-0"
+                      style={{ width: 7, height: 7, background: 'var(--green)', opacity: roleEnabled ? 1 : 0.3 }} />
+                    <span className="truncate" title={r.name}>{r.name}</span>
+                  </div>
+                  <div className="control-cell flex justify-end">
+                    <SettingControl s={s} value={value} onChange={(v) => onUpdate(r.id, s.id, v)} compact />
+                  </div>
                 </div>
-                <div className="control-cell flex justify-end">
-                  <SettingControl s={s} value={value} onChange={(v) => onUpdate(r.id, s.id, v)} compact />
-                </div>
-              </div>
+                {visibleChildren.map(c => (
+                  <div key={c.id}
+                    className="role-row per-role-row grid items-center child-row"
+                    style={{
+                      gridTemplateColumns: '160px 1fr',
+                      padding: '8px 14px 10px 32px',
+                      background: 'var(--soft-bg)',
+                      minHeight: 0,
+                    }}>
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
+                      <span className="truncate" title={c.label}>{c.label}</span>
+                    </div>
+                    <div className="control-cell flex justify-end">
+                      <SettingControl s={c}
+                        value={perRole[r.id]?.[featureId]?.values?.[c.id]}
+                        onChange={(v) => onUpdate(r.id, c.id, v)} compact />
+                    </div>
+                  </div>
+                ))}
+              </React.Fragment>
             );
           })}
         </div>
@@ -1146,12 +1345,16 @@
         <div style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
           <div className="multi-panel-body px-8 pt-4 pb-5">
             {(() => {
-              // Show every role for each setting, but hide settings whose dependsOn condition
-              // isn't met for any role.
-              const renderable = mainSettings
+              // Render only top-level settings; dependent ones are nested inline
+              // inside their parent group's role row (e.g. "Number of images allowed"
+              // appears under the role whose Download Type is "Specific Amount Download").
+              const topLevel = mainSettings.filter(s => !s.dependsOn);
+              const childrenOf = (id) => mainSettings.filter(s => s.dependsOn?.settingId === id);
+              const renderable = topLevel
                 .map(s => ({
                   s,
                   visibleRoles: roles.filter(r => isSettingVisibleForRole(s, r.id, feature.id, perRole)),
+                  childSettings: childrenOf(s.id),
                 }))
                 .filter(({ visibleRoles }) => visibleRoles.length > 0);
               if (renderable.length === 0) {
@@ -1161,11 +1364,11 @@
                   </div>
                 );
               }
-              return renderable.map(({ s, visibleRoles }, i) => (
+              return renderable.map(({ s, visibleRoles, childSettings }, i) => (
                 <PerRoleGroup key={s.id} s={s} visibleRoles={visibleRoles} perRole={perRole}
                   featureId={feature.id}
                   onUpdate={(rId, sId, v) => onUpdate(rId, sId, v)}
-                  isFirst={i === 0} />
+                  isFirst={i === 0} childSettings={childSettings} />
               ));
             })()}
 
@@ -1231,30 +1434,45 @@
           </div>
         );
       }
+      const statusLines = buildFeatureStatusLines(feature, roles, perRole);
       return (
         <div className="border-t" style={{ borderColor: 'var(--card-border)' }}>
           <div onClick={() => hasSettings && onToggleOpen()}
-            className={`feature-row grid items-center${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
-            style={{ gridTemplateColumns: gridCols, padding: '22px 0', cursor: hasSettings ? 'pointer' : 'default',
+            className={`feature-row grid items-start${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
+            style={{ gridTemplateColumns: gridCols, padding: '18px 0', cursor: hasSettings ? 'pointer' : 'default',
               background: isOpen ? 'var(--soft-bg)' : undefined }}>
-            <div className="flex items-center gap-2 pl-6">
-              <span style={{ color: 'var(--text-tertiary)', visibility: hasSettings ? 'visible' : 'hidden',
-                transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}><ChevronRight /></span>
-              {feature.icon && (
-                <span className="flex items-center justify-center" style={{ width: 20, height: 20 }}>
-                  <FeatureIcon name={feature.icon} />
-                </span>
+            <div className="pl-6">
+              <div className="flex items-center gap-2">
+                <span style={{ color: 'var(--text-tertiary)', visibility: hasSettings ? 'visible' : 'hidden',
+                  transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}><ChevronRight /></span>
+                {feature.icon && (
+                  <span className="flex items-center justify-center" style={{ width: 20, height: 20 }}>
+                    <FeatureIcon name={feature.icon} />
+                  </span>
+                )}
+                <div className="text-[14px] font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>
+                  {feature.name}
+                </div>
+              </div>
+              {statusLines.length > 0 && (
+                <div className="mt-1.5 space-y-0.5" style={{ paddingLeft: 23 }}>
+                  {statusLines.map((line, idx) => (
+                    <div key={idx} className="text-[12px] leading-snug italic" style={{ color: 'var(--text-secondary)' }}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
               )}
-              <div className="text-[14px] font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>
-                {feature.name}
-              </div>
             </div>
-            {roles.map(r => (
-              <div key={r.id} className="flex justify-center">
-                <Toggle size="sm" checked={!!perRole[r.id]?.[feature.id]?.enabled}
-                  onChange={() => onToggleEnabled(r.id)} />
-              </div>
-            ))}
+            {roles.map(r => {
+              const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
+              return (
+                <div key={r.id} className="flex justify-center pt-1">
+                  <Toggle size="sm" checked={enabled}
+                    onChange={() => onToggleEnabled(r.id)} />
+                </div>
+              );
+            })}
           </div>
         </div>
       );
@@ -1582,7 +1800,7 @@
     // ===== App =====
     function App() {
       const isMobile = useIsMobile();
-      const [roles, setRoles] = useState([{ id: 'everyone', name: 'Everyone', removable: false }]);
+      const [roles, setRoles] = useState([{ id: 'everyone', name: 'General', removable: false }]);
       const [perRole, setPerRole] = useState({ everyone: buildEveryoneState() });
       const [features, setFeatures] = useState(initialFeatures);
       const [openFeatures, setOpenFeatures] = useState(new Set());
