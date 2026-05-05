@@ -325,10 +325,6 @@
             dependsOn: { settingId: 'video-download-type', values: ['All Videos', 'Specific Amount'] } },
         ],
       },
-      { id: 'favorites', name: 'Favorites', settings: [] },
-      { id: 'commenting', name: 'Commenting', settings: [] },
-      { id: 'sharing', name: 'Sharing', settings: [] },
-      { id: 'face-finder', name: 'Face Finder', settings: [] },
       { id: 'keyword-search', name: 'Keyword Search',
         settings: [
           { id: 'placeholder', type: 'text', label: 'Search bar placeholder',
@@ -337,6 +333,10 @@
             dependsOn: { settingId: 'placeholder' } },
         ],
       },
+      { id: 'face-finder', name: 'Face Finder', settings: [] },
+      { id: 'favorites', name: 'Favorites', settings: [] },
+      { id: 'commenting', name: 'Commenting', settings: [] },
+      { id: 'sharing', name: 'Sharing', settings: [] },
     ];
 
     const PRESETS = {
