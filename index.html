@@ -1147,6 +1147,10 @@
       const visibleSettings = feature.settings.filter(s => isSettingVisibleForRole(s, role.id, feature.id, perRole));
       const topLevel = visibleSettings.filter(s => !s.dependsOn);
       const childrenOf = (id) => visibleSettings.filter(s => s.dependsOn?.settingId === id);
+      // Mirror the per-role behavior: when the single role has the feature off, dim the
+      // controls so they read as inactive without removing context.
+      const roleEnabled = !!perRole[role.id]?.[feature.id]?.enabled;
+      const disabledStyle = roleEnabled ? null : { opacity: 0.5, pointerEvents: 'none' };
       return (
         <div className="multi-panel-body px-8 py-2" style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
           {topLevel.map((s, i) => {
@@ -1165,7 +1169,7 @@
                     padding: '14px 0',
                     alignItems: isToggle ? 'flex-start' : 'center',
                   }}>
-                  <div>
+                  <div style={{ opacity: roleEnabled ? 1 : 0.6 }}>
                     <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
                     {s.meta && (
                       <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
@@ -1173,7 +1177,7 @@
                       </div>
                     )}
                   </div>
-                  <div className="control-end flex">
+                  <div className="control-end flex" style={disabledStyle} aria-disabled={!roleEnabled}>
                     <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
                   </div>
                 </div>
@@ -1185,11 +1189,11 @@
                       padding: '6px 0 12px 22px',
                       marginTop: -8,
                     }}>
-                    <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                    <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
                       <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
                       <span>{c.label}</span>
                     </div>
-                    <div className="control-end flex">
+                    <div className="control-end flex" style={disabledStyle} aria-disabled={!roleEnabled}>
                       <SettingControl s={c} value={perRole[role.id]?.[feature.id]?.values?.[c.id]} onChange={(v) => onUpdate(role.id, c.id, v)} compact />
                     </div>
                   </div>
@@ -1268,6 +1272,9 @@
             const value = perRole[r.id]?.[featureId]?.values?.[s.id];
             const roleEnabled = !!perRole[r.id]?.[featureId]?.enabled;
             const visibleChildren = childSettings.filter(c => isSettingVisibleForRole(c, r.id, featureId, perRole));
+            // When the feature is off for this role, dim its setting controls and
+            // disable interaction so they're clearly inactive without removing context.
+            const disabledStyle = roleEnabled ? null : { opacity: 0.5, pointerEvents: 'none' };
             return (
               <React.Fragment key={r.id}>
                 <div
@@ -1278,12 +1285,13 @@
                     borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none',
                     background: '#fff',
                   }}>
-                  <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>
+                  <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
                     <span className="rounded-full shrink-0"
                       style={{ width: 7, height: 7, background: 'var(--green)', opacity: roleEnabled ? 1 : 0.3 }} />
                     <span className="truncate" title={r.name}>{r.name}</span>
                   </div>
-                  <div className="control-cell flex justify-end">
+                  <div className="control-cell flex justify-end" style={disabledStyle}
+                    aria-disabled={!roleEnabled}>
                     <SettingControl s={s} value={value} onChange={(v) => onUpdate(r.id, s.id, v)} compact />
                   </div>
                 </div>
@@ -1296,11 +1304,12 @@
                       background: 'var(--soft-bg)',
                       minHeight: 0,
                     }}>
-                    <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
                       <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
                       <span className="truncate" title={c.label}>{c.label}</span>
                     </div>
-                    <div className="control-cell flex justify-end">
+                    <div className="control-cell flex justify-end" style={disabledStyle}
+                      aria-disabled={!roleEnabled}>
                       <SettingControl s={c}
                         value={perRole[r.id]?.[featureId]?.values?.[c.id]}
                         onChange={(v) => onUpdate(r.id, c.id, v)} compact />
@@ -1984,7 +1993,7 @@
                     onAdd={addContact} onRemoveContact={removeContact}
                     activeSection={activeSection} onSelectSection={setActiveSection} />
                 ) : (
-                <main className="main-pane flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 920 }}>
+                <main className="main-pane flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 1150 }}>
                   <MobileSectionNav activeSection={activeSection}
                     onSelectSection={setActiveSection} contactsCount={contacts.length} />
                   <header className="gallery-features-header mb-4 flex items-start justify-between gap-4">
