@@ -63,6 +63,13 @@
     .feature-row { transition: background-color 0.15s; }
     .feature-row.is-collapsible:not(.is-open):hover { background: var(--row-hover); }
     .kebab-btn:hover { background: rgba(0,0,0,0.06); color: var(--text-secondary); }
+    /* Matrix horizontal scroll — kicks in once total grid width exceeds the panel width
+       (e.g. advanced setups with many roles). Thin, subtle scrollbar so it doesn't dominate. */
+    .matrix-scroll { border-radius: 12px; }
+    .matrix-scroll::-webkit-scrollbar { height: 8px; }
+    .matrix-scroll::-webkit-scrollbar-track { background: transparent; }
+    .matrix-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
+    .matrix-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
     .nav-item { transition: color 0.15s, background 0.15s; color: var(--nav-text); }
     .nav-item:hover { color: #fff; }
     .nav-item.is-active { color: var(--brand); background: var(--nav-active-bg); }
@@ -299,6 +306,10 @@
             dependsOn: { settingId: 'video-download-type', values: ['All Videos', 'Specific Amount'] } },
         ],
       },
+      { id: 'favorites', name: 'Favorites', settings: [] },
+      { id: 'commenting', name: 'Commenting', settings: [] },
+      { id: 'sharing', name: 'Sharing', settings: [] },
+      { id: 'face-finder', name: 'Face Finder', settings: [] },
       { id: 'keyword-search', name: 'Keyword Search',
         settings: [
           { id: 'placeholder', type: 'text', label: 'Search bar placeholder',
@@ -307,10 +318,6 @@
             dependsOn: { settingId: 'placeholder' } },
         ],
       },
-      { id: 'favorites', name: 'Favorites', settings: [] },
-      { id: 'commenting', name: 'Commenting', settings: [] },
-      { id: 'sharing', name: 'Sharing', settings: [] },
-      { id: 'face-finder', name: 'Face Finder', settings: [] },
     ];
 
     const PRESETS = {
@@ -1434,12 +1441,16 @@
           </div>
         );
       }
-      const statusLines = buildFeatureStatusLines(feature, roles, perRole);
+      // Only the download features carry meaningful per-role configuration that benefits
+      // from a plain-English summary; for everything else the toggle alone is enough.
+      const SUMMARY_FEATURES = new Set(['photo-downloads', 'video-downloads']);
+      const showSummary = SUMMARY_FEATURES.has(feature.id);
+      const statusLines = showSummary ? buildFeatureStatusLines(feature, roles, perRole) : [];
       return (
         <div className="border-t" style={{ borderColor: 'var(--card-border)' }}>
           <div onClick={() => hasSettings && onToggleOpen()}
-            className={`feature-row grid items-start${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
-            style={{ gridTemplateColumns: gridCols, padding: '18px 0', cursor: hasSettings ? 'pointer' : 'default',
+            className={`feature-row grid items-${showSummary ? 'start' : 'center'}${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
+            style={{ gridTemplateColumns: gridCols, padding: showSummary ? '18px 0' : '14px 0', cursor: hasSettings ? 'pointer' : 'default',
               background: isOpen ? 'var(--soft-bg)' : undefined }}>
             <div className="pl-6">
               <div className="flex items-center gap-2">
@@ -1454,7 +1465,7 @@
                   {feature.name}
                 </div>
               </div>
-              {statusLines.length > 0 && (
+              {showSummary && statusLines.length > 0 && (
                 <div className="mt-1.5 space-y-0.5" style={{ paddingLeft: 23 }}>
                   {statusLines.map((line, idx) => (
                     <div key={idx} className="text-[12px] leading-snug italic" style={{ color: 'var(--text-secondary)' }}>
@@ -1467,7 +1478,7 @@
             {roles.map(r => {
               const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
               return (
-                <div key={r.id} className="flex justify-center pt-1">
+                <div key={r.id} className="flex justify-center">
                   <Toggle size="sm" checked={enabled}
                     onChange={() => onToggleEnabled(r.id)} />
                 </div>
@@ -1836,10 +1847,16 @@
         setTimeout(() => setToast(null), 2500);
       };
 
-      const gridCols = useMemo(() => {
-        const w = roles.length <= 2 ? 130 : roles.length <= 4 ? 105 : 90;
-        return `1fr repeat(${roles.length}, ${w}px)`;
-      }, [roles.length]);
+      // Matrix sizing: a fixed-width feature column that never squishes, and consistent
+      // role cells. When the total width exceeds the viewport (advanced setups with many
+      // roles), the matrix scrolls horizontally inside its container.
+      const FEATURE_MIN_WIDTH = 360;
+      const ROLE_CELL_WIDTH = 110;
+      const gridCols = useMemo(
+        () => `minmax(${FEATURE_MIN_WIDTH}px, 1fr) repeat(${roles.length}, ${ROLE_CELL_WIDTH}px)`,
+        [roles.length]
+      );
+      const matrixMinWidth = FEATURE_MIN_WIDTH + roles.length * ROLE_CELL_WIDTH;
 
       const addRole = (presetId, customName, contact) => {
         const preset = PRESETS[presetId];
@@ -2018,7 +2035,8 @@
                     );
                   })()}
 
-                  <div className="bg-white rounded-xl border" style={{ borderColor: 'var(--card-border)' }}>
+                  <div className="matrix-scroll" style={{ overflowX: 'auto' }}>
+                  <div className="bg-white rounded-xl border" style={{ borderColor: 'var(--card-border)', minWidth: !isMobile ? matrixMinWidth : undefined }}>
                     {/* Header row — desktop only; mobile uses the role strip above + per-feature stacked rows. */}
                     {!isMobile && (
                       <div className="grid items-center" style={{ gridTemplateColumns: gridCols, padding: '14px 0',
@@ -2072,6 +2090,7 @@
                         </React.Fragment>
                       );
                     })}
+                  </div>
                   </div>
                 </main>
                 )}
