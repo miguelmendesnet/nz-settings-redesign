@@ -70,6 +70,13 @@
     .matrix-scroll::-webkit-scrollbar-track { background: transparent; }
     .matrix-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
     .matrix-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
+    /* Access mode picker grid — collapse to 2 cols on narrow screens, 1 col on phones. */
+    @media (max-width: 900px) {
+      .access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    }
+    @media (max-width: 540px) {
+      .access-grid { grid-template-columns: 1fr !important; }
+    }
     .nav-item { transition: color 0.15s, background 0.15s; color: var(--nav-text); }
     .nav-item:hover { color: #fff; }
     .nav-item.is-active { color: var(--brand); background: var(--nav-active-bg); }
@@ -220,6 +227,18 @@
       </svg>
     );
     const LockIcon = (p) => <Icon {...p} d={["M5 11h14v9H5z", "M8 11V7a4 4 0 0 1 8 0v4"]} />;
+    // Paper-plane icon for the "Invite Only" access mode
+    const SendIcon = (p) => <Icon {...p} d={["M22 2L11 13","M22 2l-7 20-4-9-9-4 20-7z"]} />;
+    // No-entry / prohibition icon for the "Offline" access mode
+    const BlockIcon = (p) => <Icon {...p} d={["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z","M5 5l14 14"]} />;
+    // Triangle warning glyph for the OFFLINE sidebar message
+    const WarningIcon = ({ size = 14, color = '#D9534F' }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2L1 21h22L12 2z" />
+        <path d="M12 9v5" />
+        <circle cx="12" cy="17.5" r="0.6" fill={color} />
+      </svg>
+    );
     const FeaturesIcon = (p) => <Icon {...p} d={["M4 5h16v14H4z","M8 10l3 3 5-5"]} />;
     const PeopleIcon = (p) => <Icon {...p} d={["M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M3 20c0-3 3-5 6-5s6 2 6 5", "M15 15c2 0 6 2 6 5"]} />;
     const CartIcon = (p) => <Icon {...p} d={["M3 4h2l2 12h12l2-9H6", "M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z", "M17 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"]} />;
@@ -329,6 +348,24 @@
       custom: { name: '', icon: SlidersIcon, title: 'CREATE YOUR OWN',
         desc: 'Start from scratch and configure permissions yourself', enabled: [] },
     };
+
+    // Gallery access levels — drive the Access tab card grid + the Access sidebar card.
+    // `sidebar` returns a renderable description (with bolded keyword) for the sidebar
+    // summary; `card` is the long-form description shown in the picker tile.
+    const ACCESS_MODES = [
+      { id: 'public', label: 'Public', badge: 'PUBLIC', danger: false, icon: PeopleIcon,
+        card: 'Anyone with the gallery link has access.',
+        sidebar: () => (<><strong>Anyone</strong> with the link can view and purchase</>) },
+      { id: 'password', label: 'Password Protected', badge: 'PASS. PROTECTED', danger: false, icon: LockIcon,
+        card: 'Anyone with the gallery link and the gallery password can access.',
+        sidebar: () => (<>Anyone with the link and <strong>password</strong> can view and purchase</>) },
+      { id: 'invite', label: 'Invite Only', badge: 'INVITE ONLY', danger: false, icon: SendIcon,
+        card: <>Only contacts <strong>you add</strong> to the gallery contacts list can access.</>,
+        sidebar: () => (<>Only <strong>invited contacts</strong> can view and purchase</>) },
+      { id: 'offline', label: 'Offline', badge: 'OFFLINE', danger: true, icon: BlockIcon,
+        card: 'Gallery is only visible to you, no one else can access.',
+        sidebar: () => (<><span style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: 4 }}><WarningIcon /></span><strong>No one</strong> can access</>) },
+    ];
 
     const buildRoleState = (presetId) => {
       const preset = PRESETS[presetId];
@@ -631,13 +668,14 @@
       );
     };
 
-    const InnerSidebar = ({ features, roles, perRole, activeSection, onSelectSection, contacts = [] }) => {
+    const InnerSidebar = ({ features, roles, perRole, activeSection, onSelectSection, contacts = [], accessMode }) => {
       const featureStatus = (fId) => {
         const onCount = roles.filter(r => perRole[r.id]?.[fId]?.enabled).length;
         if (onCount === 0) return { state: 'none' };
         if (onCount === roles.length) return { state: 'all' };
         return { state: 'some', fraction: `${onCount}/${roles.length}` };
       };
+      const isAccess = activeSection === 'access';
       const isFeatures = activeSection === 'features';
       const isContacts = activeSection === 'contacts';
       const contactsCount = contacts.length;
@@ -646,11 +684,26 @@
       const roleCounts = roles
         .map(r => ({ id: r.id, name: r.name, count: contacts.filter(c => c.roleId === r.id).length }))
         .filter(r => r.count > 0);
+      const access = ACCESS_MODES.find(m => m.id === accessMode) || ACCESS_MODES[0];
       return (
-        <aside className="inner-sidebar w-[220px] shrink-0 px-5 pt-6 pb-10">
-          <div className="rounded-xl px-3 py-3 mb-2 bg-white border" style={{ borderColor: 'var(--card-border)' }}>
-            <div className="flex items-center gap-2 mb-2"><LockIcon size={15} /><span className="text-[13px] font-semibold">Access &amp; Permissions</span></div>
-            <SidebarBadge>Public Gallery</SidebarBadge>
+        <aside className="inner-sidebar w-[270px] shrink-0 px-5 pt-6 pb-10">
+          <div onClick={() => onSelectSection('access')}
+            className="rounded-xl px-3 py-3 mb-2 cursor-pointer transition-colors"
+            style={{ background: isAccess ? 'var(--brand-cream)' : '#fff',
+                     border: '1px solid', borderColor: isAccess ? 'transparent' : 'var(--card-border)' }}>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2" style={{ color: isAccess ? 'var(--brand)' : 'var(--text-primary)' }}>
+                <LockIcon size={15} stroke={2} />
+                <span className="text-[14px] font-semibold">Access</span>
+              </div>
+              <span className="text-[10px] font-bold tracking-wider uppercase rounded px-2 py-1 whitespace-nowrap"
+                style={{ background: access.danger ? 'var(--danger)' : 'var(--brand)', color: '#fff', letterSpacing: '0.05em' }}>
+                {access.badge}
+              </span>
+            </div>
+            <div className="text-[12px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
+              {access.sidebar()}
+            </div>
           </div>
           <div onClick={() => onSelectSection('features')}
             className="rounded-xl px-3 py-3 mb-2 cursor-pointer transition-colors"
@@ -1565,15 +1618,17 @@
 
     // Mobile section nav — replaces the inner sidebar on small screens.
     const MobileSectionNav = ({ activeSection, onSelectSection, contactsCount }) => (
-      <div className="mobile-section-nav mobile-only mb-4 rounded-md p-1 bg-white border" style={{ borderColor: 'var(--card-border)' }}>
+      <div className="mobile-section-nav mobile-only mb-4 rounded-md p-1 bg-white border overflow-x-auto"
+        style={{ borderColor: 'var(--card-border)' }}>
         {[
-          { id: 'features', label: 'Gallery Features' },
+          { id: 'access', label: 'Access' },
+          { id: 'features', label: 'Features' },
           { id: 'contacts', label: `Contacts (${contactsCount})` },
         ].map(item => {
           const active = activeSection === item.id;
           return (
             <button key={item.id} onClick={() => onSelectSection(item.id)}
-              className="flex-1 text-[11px] font-bold tracking-wider uppercase py-2 rounded transition-colors"
+              className="flex-1 text-[11px] font-bold tracking-wider uppercase py-2 rounded transition-colors whitespace-nowrap"
               style={{
                 background: active ? 'var(--brand-cream)' : 'transparent',
                 color: active ? 'var(--brand)' : 'var(--text-secondary)',
@@ -1584,6 +1639,86 @@
         })}
       </div>
     );
+
+    // Card tile in the Access picker grid. The card surface is the click target.
+    const AccessCard = ({ mode, selected, onSelect }) => {
+      const Ico = mode.icon;
+      return (
+        <button type="button" onClick={onSelect}
+          className="text-left rounded-xl px-5 py-5 bg-white border transition-colors"
+          style={{
+            borderColor: selected ? 'var(--brand)' : 'var(--card-border)',
+            borderWidth: selected ? 2 : 1,
+            // Pull the inner padding in by 1px when selected so the layout doesn't shift
+            // when the border thickens.
+            padding: selected ? '19px' : '20px',
+          }}>
+          <div className="mb-4" style={{ color: selected ? 'var(--brand)' : 'var(--text-secondary)' }}>
+            <Ico size={26} stroke={1.7} />
+          </div>
+          <div className="text-[12px] font-extrabold tracking-wider uppercase mb-2" style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>
+            {mode.label}
+          </div>
+          <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            {mode.card}
+          </div>
+        </button>
+      );
+    };
+
+    const AccessSection = ({
+      mode, onSelectMode,
+      showRegistration, onToggleRegistration,
+      allowSearch, onToggleSearch,
+      activeSection, onSelectSection, contactsCount,
+    }) => {
+      const [showAdvanced, setShowAdvanced] = useState(false);
+      return (
+        <main className="main-pane flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 1150 }}>
+          <MobileSectionNav activeSection={activeSection}
+            onSelectSection={onSelectSection} contactsCount={contactsCount} />
+          <header className="gallery-features-header mb-5">
+            <h1 className="features-header-h1 text-[18px] font-extrabold tracking-tight uppercase" style={{ color: 'var(--brand)', letterSpacing: '0.02em' }}>Gallery Access</h1>
+            <p className="text-[13px] mt-1" style={{ color: 'var(--text-secondary)' }}>Set the level of access for Gallery</p>
+          </header>
+          <div className="grid gap-3 mb-6 access-grid"
+            style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+            {ACCESS_MODES.map(m => (
+              <AccessCard key={m.id} mode={m}
+                selected={mode === m.id}
+                onSelect={() => onSelectMode(m.id)} />
+            ))}
+          </div>
+          <div className="flex items-center justify-between py-3"
+            style={{ borderBottom: '1px solid var(--card-border)' }}>
+            <div className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Show Gallery Registration
+            </div>
+            <Toggle size="sm" checked={showRegistration} onChange={onToggleRegistration} />
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <div className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Allow gallery to appear in search results: <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>{allowSearch ? 'On' : 'Off'}</span>
+            </div>
+            <Toggle size="sm" checked={allowSearch} onChange={onToggleSearch} />
+          </div>
+          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1 text-[13px] font-semibold mt-2"
+            style={{ color: 'var(--brand)' }}>
+            {showAdvanced ? 'Hide' : 'Show'} Advanced Settings
+            <span style={{ display: 'inline-block', transform: showAdvanced ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+              <ChevronDown size={14} />
+            </span>
+          </button>
+          {showAdvanced && (
+            <div className="mt-3 rounded-lg border bg-white p-4 text-[12px] italic"
+              style={{ borderColor: 'var(--card-border)', color: 'var(--text-tertiary)' }}>
+              Advanced settings placeholder.
+            </div>
+          )}
+        </main>
+      );
+    };
 
     const ContactsView = ({ contacts, roles, onAdd, onRemoveContact, activeSection, onSelectSection }) => {
       const isMobile = useIsMobile();
@@ -1830,8 +1965,12 @@
       const [renamingRoleId, setRenamingRoleId] = useState(null);
       const [toast, setToast] = useState(null);
       const [contacts, setContacts] = useState([]);
-      const [activeSection, setActiveSection] = useState('features'); // 'features' | 'contacts'
+      const [activeSection, setActiveSection] = useState('features'); // 'access' | 'features' | 'contacts'
       const [mobileEditFeatureId, setMobileEditFeatureId] = useState(null);
+      // Access tab — gallery-wide access mode + a couple of toggles. Defaults to public.
+      const [accessMode, setAccessMode] = useState('public');
+      const [showGalleryRegistration, setShowGalleryRegistration] = useState(false);
+      const [allowSearchResults, setAllowSearchResults] = useState(false);
 
       const addContact = (c) => {
         const id = `contact-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1987,11 +2126,18 @@
               <div className="layout-pane flex flex-1" style={{ background: '#fff' }}>
                 <InnerSidebar features={features} roles={roles} perRole={perRole}
                   activeSection={activeSection} onSelectSection={setActiveSection}
-                  contacts={contacts} />
+                  contacts={contacts} accessMode={accessMode} />
                 {activeSection === 'contacts' ? (
                   <ContactsView contacts={contacts} roles={roles}
                     onAdd={addContact} onRemoveContact={removeContact}
                     activeSection={activeSection} onSelectSection={setActiveSection} />
+                ) : activeSection === 'access' ? (
+                  <AccessSection
+                    mode={accessMode} onSelectMode={setAccessMode}
+                    showRegistration={showGalleryRegistration} onToggleRegistration={() => setShowGalleryRegistration(v => !v)}
+                    allowSearch={allowSearchResults} onToggleSearch={() => setAllowSearchResults(v => !v)}
+                    activeSection={activeSection} onSelectSection={setActiveSection}
+                    contactsCount={contacts.length} />
                 ) : (
                 <main className="main-pane flex-1 px-6 pt-6 pb-12" style={{ maxWidth: 1150 }}>
                   <MobileSectionNav activeSection={activeSection}
