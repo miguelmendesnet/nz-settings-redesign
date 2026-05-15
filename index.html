@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sample Gallery — Gallery Features</title>
+  <title>Sample Gallery — Gallery Features (v3)</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -70,6 +70,20 @@
     .matrix-scroll::-webkit-scrollbar-track { background: transparent; }
     .matrix-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
     .matrix-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
+    .compare-roles-btn:hover { background: var(--brand-cream) !important; }
+    /* Compare-roles modal — uses the same scrollbar styling as the matrix when the grid
+       grows wider than the modal viewport (many roles). */
+    .compare-grid-scroll { overflow-x: auto; overflow-y: visible; }
+    .compare-grid-scroll::-webkit-scrollbar { height: 8px; }
+    .compare-grid-scroll::-webkit-scrollbar-track { background: transparent; }
+    .compare-grid-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
+    .compare-grid-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
+    /* Compare cells — make controls inside them fit the column width so long dropdown
+       option labels (e.g. "Full Gallery & Individual Download") don't overflow into the
+       next column. Selects and number inputs flex to fill the cell. */
+    .compare-cell > .relative.inline-block { display: block; width: 100%; }
+    .compare-cell select { width: 100%; min-width: 0 !important; }
+    .compare-cell input[type="number"] { width: 100% !important; }
     /* Access mode picker grid — collapse to 2 cols on narrow screens, 1 col on phones. */
     @media (max-width: 900px) {
       .access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
@@ -247,6 +261,8 @@
     const StarIcon = (p) => <Icon {...p} d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1L3.2 9.4l6.1-.9L12 3z" />;
     const SlidersIcon = (p) => <Icon {...p} d={["M4 6h10","M18 6h2","M4 12h4","M12 12h8","M4 18h12","M20 18h0","M16 4v4","M10 10v4","M14 16v4"]} />;
     const PencilIcon = (p) => <Icon {...p} d={["M4 20h4l10-10-4-4L4 16v4z","M14 6l4 4"]} />;
+    // Two-column compare glyph for the "Compare Roles" tool
+    const CompareIcon = (p) => <Icon {...p} d={["M4 5h7v14H4z","M13 5h7v14h-7z","M7 9h1","M7 12h1","M7 15h1","M16 9h1","M16 12h1","M16 15h1"]} />;
     const KebabIcon = ({ size = 14 }) => (
       <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
         <circle cx="8" cy="3" r="1.4"/>
@@ -532,7 +548,7 @@
         <div className="flex items-center gap-2">
           <span className="text-[20px] font-extrabold tracking-tight" style={{ color: '#222' }}>zenfolio</span>
           <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded"
-            style={{ background: 'var(--brand-cream, #FFF1E6)', color: 'var(--brand)', border: '1px solid var(--brand)' }}>v2</span>
+            style={{ background: 'var(--brand-cream, #FFF1E6)', color: 'var(--brand)', border: '1px solid var(--brand)' }}>v3</span>
         </div>
         <div className="flex items-center gap-4" style={{ color: 'var(--text-secondary)' }}>
           <button className="hover:text-black"><BookIcon size={18} /></button>
@@ -1405,13 +1421,26 @@
     // available role; OFF roles still appear (with a greyed indicator inside PerRoleGroup)
     // so users can configure them ahead of enabling. Optional/global settings (e.g. license)
     // remain a single shared row that applies across roles.
-    const MultiRoleSettingsBlock = ({ feature, roles, perRole, onUpdate, onUpdateShared }) => {
+    const MultiRoleSettingsBlock = ({ feature, roles, perRole, onUpdate, onUpdateShared, onOpenCompare }) => {
       const mainSettings = feature.settings.filter(s => !s.optional);
       const optionalSettings = feature.settings.filter(s => s.optional);
       const refRoleId = roles[0].id;
 
       return (
         <div style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
+          {/* Compare Roles entry point — opt-in advanced tool. The default stacked editing
+              flow stays untouched; this button reveals a side-by-side matrix in a modal so
+              power users can scan/compare without forcing the whole UI into a grid. */}
+          {roles.length > 1 && onOpenCompare && (
+            <div className="flex items-center justify-end px-8 pt-3">
+              <button type="button" onClick={onOpenCompare}
+                className="compare-roles-btn flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase px-3 py-1.5 rounded-md border bg-white transition-colors"
+                style={{ color: 'var(--brand)', borderColor: 'var(--brand)', letterSpacing: '0.05em' }}
+                title="Open a side-by-side comparison of this feature's settings across all roles">
+                <CompareIcon size={13} /> Compare Roles
+              </button>
+            </div>
+          )}
           <div className="multi-panel-body px-8 pt-4 pb-5">
             {(() => {
               // Render only top-level settings; dependent ones are nested inline
@@ -1546,6 +1575,200 @@
                 </div>
               );
             })}
+          </div>
+        </div>
+      );
+    };
+
+    // ===== Compare Roles Modal =====
+    // Opt-in advanced tool — keeps v2's stacked per-role editing as the default flow but
+    // lets power users flip into a side-by-side matrix to scan/compare settings across
+    // all roles at once. Edits inside the modal write back through the same callbacks
+    // (onUpdate / onUpdateShared) used elsewhere, so opening / closing this view is
+    // non-destructive.
+    const CompareRolesModal = ({ feature, roles, perRole, onClose, onUpdate, onUpdateShared, onToggleEnabled }) => {
+      useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+      }, []);
+      // Flatten settings into a list of rows. Dependent settings render as indented
+      // sub-rows. Visibility is computed per-cell against each role's actual values so
+      // a dependent input shows up only for the roles whose parent value enables it.
+      const rows = [];
+      feature.settings.forEach(s => {
+        if (s.dependsOn) {
+          rows.push({ s, isChild: true });
+        } else {
+          rows.push({ s, isChild: false });
+        }
+      });
+      const refRoleId = roles[0].id;
+      // Sizing: feature/setting label column + one cell per role. Columns are roomy
+      // enough for the longest dropdown labels ("Full Gallery & Individual Download")
+      // to fit without overlap; horizontal scroll kicks in when there are many roles.
+      const SETTING_COL_WIDTH = 230;
+      const ROLE_COL_WIDTH = 260;
+      const minGridWidth = SETTING_COL_WIDTH + roles.length * ROLE_COL_WIDTH;
+
+      return (
+        <div className="fixed inset-0 z-[50] flex items-center justify-center modal-backdrop"
+          onClick={onClose}
+          style={{ background: 'rgba(0,0,0,0.45)', padding: 24 }}>
+          <div className="modal-card relative bg-white rounded-xl shadow-2xl flex flex-col"
+            style={{ width: '100%', maxWidth: 1280, maxHeight: '90vh' }}
+            onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <header className="flex items-center justify-between px-5 h-14 border-b shrink-0"
+              style={{ borderColor: 'var(--card-border)' }}>
+              <div className="flex items-center gap-2">
+                <CompareIcon size={16} stroke={1.7} />
+                <h2 className="text-[15px] font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                  Compare Roles — {feature.name}
+                </h2>
+                <span className="text-[12px] ml-2" style={{ color: 'var(--text-secondary)' }}>
+                  {roles.length} role{roles.length === 1 ? '' : 's'} side-by-side
+                </span>
+              </div>
+              <button onClick={onClose} className="p-2 -mr-1 rounded-md hover:bg-black/5"
+                aria-label="Close compare" style={{ color: 'var(--text-primary)' }}>
+                <CloseIcon size={20} />
+              </button>
+            </header>
+
+            {/* Body */}
+            <div className="compare-grid-scroll flex-1" style={{ overflowY: 'auto' }}>
+              <div style={{ minWidth: minGridWidth }}>
+                {/* Column header row — sticky to top of scroll area for long lists */}
+                <div className="grid items-center" style={{
+                  gridTemplateColumns: `${SETTING_COL_WIDTH}px repeat(${roles.length}, ${ROLE_COL_WIDTH}px)`,
+                  background: 'var(--soft-bg)',
+                  borderBottom: '1px solid var(--card-border)',
+                  position: 'sticky', top: 0, zIndex: 2,
+                  padding: '12px 0',
+                }}>
+                  <div className="pl-5 text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                    Setting
+                  </div>
+                  {roles.map(r => {
+                    const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
+                    return (
+                      <div key={r.id} className="px-4 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider truncate"
+                        style={{ color: 'var(--text-primary)', opacity: enabled ? 1 : 0.55 }}
+                        title={`${r.name}${enabled ? '' : ' — feature off'}`}>
+                        <span className="rounded-full shrink-0"
+                          style={{ width: 7, height: 7, background: 'var(--green)', opacity: enabled ? 1 : 0.3 }} />
+                        <span className="truncate">{r.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Feature on/off row — surface the main feature toggle inside compare so
+                    users can flip a role on/off without leaving the modal. Pinned visually
+                    above the settings (own background tint, slightly larger padding). */}
+                <div className="grid items-center" style={{
+                  gridTemplateColumns: `${SETTING_COL_WIDTH}px repeat(${roles.length}, ${ROLE_COL_WIDTH}px)`,
+                  borderBottom: '1px solid var(--card-border)',
+                  background: '#FFFDF6',
+                  padding: '14px 0',
+                }}>
+                  <div className="pl-5 pr-3 flex items-center gap-1.5">
+                    <span className="rounded-full shrink-0"
+                      style={{ width: 8, height: 8, background: 'var(--brand)' }} />
+                    <span className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      Feature
+                    </span>
+                  </div>
+                  {roles.map(r => {
+                    const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
+                    return (
+                      <div key={r.id} className="px-4 flex items-center gap-2">
+                        <Toggle size="sm" checked={enabled}
+                          onChange={() => onToggleEnabled && onToggleEnabled(r.id)} />
+                        <span className="text-[11px] font-bold uppercase tracking-wider"
+                          style={{ color: enabled ? 'var(--brand)' : 'var(--text-tertiary)' }}>
+                          {enabled ? 'On' : 'Off'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Setting rows */}
+                {rows.map(({ s, isChild }, idx) => {
+                  const isLast = idx === rows.length - 1;
+                  // Shared (optional) settings like "Digital photo license agreement"
+                  // apply to every role uniformly — render a single control spanning
+                  // the role columns instead of N identical toggles.
+                  if (s.optional) {
+                    const value = perRole[refRoleId]?.[feature.id]?.values?.[s.id];
+                    return (
+                      <div key={s.id} className="grid items-center" style={{
+                        gridTemplateColumns: `${SETTING_COL_WIDTH}px 1fr`,
+                        borderBottom: isLast ? 'none' : '1px solid var(--card-border)',
+                        padding: '14px 0',
+                        background: '#FBFAF6',
+                      }}>
+                        <div className="pl-5 pr-3 flex items-center gap-1.5 text-[12px]"
+                          style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                          <span className="truncate" title={s.label}>{s.label}</span>
+                        </div>
+                        <div className="compare-cell px-4 flex items-center gap-3">
+                          <SettingControl s={s} value={value} onChange={(v) => onUpdateShared(s.id, v)} compact />
+                          <span className="text-[11px] italic" style={{ color: 'var(--text-tertiary)' }}>
+                            Applies to all roles
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={s.id} className="grid items-center" style={{
+                      gridTemplateColumns: `${SETTING_COL_WIDTH}px repeat(${roles.length}, ${ROLE_COL_WIDTH}px)`,
+                      borderBottom: isLast ? 'none' : '1px solid var(--card-border)',
+                      padding: '14px 0',
+                      background: isChild ? 'var(--soft-bg)' : '#fff',
+                    }}>
+                      <div className="pl-5 pr-3 flex items-center gap-1.5 text-[12px]"
+                        style={{ color: 'var(--text-primary)', fontWeight: isChild ? 500 : 600 }}>
+                        {isChild && <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>}
+                        <span className="truncate" title={s.label}>{s.label}</span>
+                      </div>
+                      {roles.map(r => {
+                        const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
+                        const visible = isSettingVisibleForRole(s, r.id, feature.id, perRole);
+                        const disabledStyle = enabled ? null : { opacity: 0.5, pointerEvents: 'none' };
+                        const value = perRole[r.id]?.[feature.id]?.values?.[s.id];
+                        const handleChange = (v) => onUpdate(r.id, s.id, v);
+                        return (
+                          <div key={r.id} className="compare-cell px-4 flex justify-start" style={disabledStyle}>
+                            {visible ? (
+                              <SettingControl s={s} value={value} onChange={handleChange} compact />
+                            ) : (
+                              <span className="text-[11px] italic" style={{ color: 'var(--text-tertiary)' }}>—</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <footer className="flex items-center justify-between px-5 py-3 border-t shrink-0 text-[12px]"
+              style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
+              <span>Changes save automatically and apply immediately.</span>
+              <button onClick={onClose}
+                className="text-[12px] font-bold tracking-wider uppercase px-4 py-2 rounded-md text-white"
+                style={{ background: 'var(--brand)' }}>
+                Done
+              </button>
+            </footer>
           </div>
         </div>
       );
@@ -1967,6 +2190,9 @@
       const [contacts, setContacts] = useState([]);
       const [activeSection, setActiveSection] = useState('features'); // 'access' | 'features' | 'contacts'
       const [mobileEditFeatureId, setMobileEditFeatureId] = useState(null);
+      // Side-by-side compare modal (v3 — opt-in advanced view). Holds the feature.id
+      // whose comparison view is currently open, or null when closed.
+      const [compareFeatureId, setCompareFeatureId] = useState(null);
       // Access tab — gallery-wide access mode + a couple of toggles. Defaults to public.
       const [accessMode, setAccessMode] = useState('public');
       const [showGalleryRegistration, setShowGalleryRegistration] = useState(false);
@@ -2236,6 +2462,7 @@
                                 feature={feature} roles={roles} perRole={perRole}
                                 onUpdate={(rId, sId, v) => updateValue(feature.id, rId, sId, v)}
                                 onUpdateShared={(sId, v) => updateSharedValue(feature.id, sId, v)}
+                                onOpenCompare={() => setCompareFeatureId(feature.id)}
                               />
                             ) : (
                               <SimpleSettingsBlock feature={feature} role={roles[0]} perRole={perRole}
@@ -2278,6 +2505,19 @@
                 onClose={() => setMobileEditFeatureId(null)}
                 onUpdate={(rId, sId, v) => updateValue(feature.id, rId, sId, v)}
                 onUpdateShared={(sId, v) => updateSharedValue(feature.id, sId, v)} />
+            );
+          })()}
+
+          {compareFeatureId && (() => {
+            const feature = features.find(f => f.id === compareFeatureId);
+            if (!feature) return null;
+            return (
+              <CompareRolesModal
+                feature={feature} roles={roles} perRole={perRole}
+                onClose={() => setCompareFeatureId(null)}
+                onUpdate={(rId, sId, v) => updateValue(feature.id, rId, sId, v)}
+                onUpdateShared={(sId, v) => updateSharedValue(feature.id, sId, v)}
+                onToggleEnabled={(rId) => toggleEnabled(feature.id, rId)} />
             );
           })()}
 
