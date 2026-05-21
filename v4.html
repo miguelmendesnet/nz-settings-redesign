@@ -1621,6 +1621,21 @@
           return next;
         });
       };
+      // Flipping a role ON for a feature that has its own settings auto-expands the
+      // section so the just-enabled role's configuration is immediately visible. If the
+      // user is turning it OFF, leave the collapse state alone.
+      const handleFeatureToggle = (feature, roleId) => {
+        const wasEnabled = !!perRole[roleId]?.[feature.id]?.enabled;
+        onToggleEnabled && onToggleEnabled(feature.id, roleId);
+        if (!wasEnabled && feature.settings && feature.settings.length > 0) {
+          setCollapsed(prev => {
+            if (!prev.has(feature.id)) return prev;
+            const next = new Set(prev);
+            next.delete(feature.id);
+            return next;
+          });
+        }
+      };
       const refRoleId = roles[0].id;
       // Column widths — roomy enough for radio option labels without crowding adjacent
       // columns. Horizontal scroll inside the modal kicks in past ~6 roles.
@@ -1748,7 +1763,7 @@
                                 padding: '10px 16px',
                               }}>
                               <Toggle size="sm" checked={enabled}
-                                onChange={() => onToggleEnabled && onToggleEnabled(feature.id, r.id)} />
+                                onChange={() => handleFeatureToggle(feature, r.id)} />
                               <span className="text-[11px] font-bold uppercase tracking-wider"
                                 style={{ color: enabled ? 'var(--brand)' : 'var(--text-tertiary)' }}>
                                 {enabled ? 'On' : 'Off'}
@@ -2375,13 +2390,28 @@
       };
 
       const toggleEnabled = (featureId, roleId) => {
+        const wasEnabled = !!perRole[roleId]?.[featureId]?.enabled;
         setPerRole({
           ...perRole,
           [roleId]: {
             ...perRole[roleId],
-            [featureId]: { ...perRole[roleId][featureId], enabled: !perRole[roleId][featureId].enabled },
+            [featureId]: { ...perRole[roleId][featureId], enabled: !wasEnabled },
           },
         });
+        // Flipping a role ON for a feature that has its own settings auto-expands
+        // the accordion in the main view, so the just-enabled role's configuration
+        // becomes immediately visible without an extra click.
+        if (!wasEnabled) {
+          const feature = features.find(f => f.id === featureId);
+          if (feature && feature.settings && feature.settings.length > 0) {
+            setOpenFeatures(prev => {
+              if (prev.has(featureId)) return prev;
+              const next = new Set(prev);
+              next.add(featureId);
+              return next;
+            });
+          }
+        }
       };
 
       const updateValue = (featureId, roleId, settingId, value) => {
