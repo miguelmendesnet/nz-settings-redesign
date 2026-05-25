@@ -158,11 +158,11 @@
     .compare-grid-scroll::-webkit-scrollbar-track { background: transparent; }
     .compare-grid-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
     .compare-grid-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
-    /* Compare cells — make controls inside them fit the column width so long dropdown
-       option labels (e.g. "Full Gallery & Individual Download") don't overflow into the
-       next column. Selects and number inputs flex to fill the cell. */
-    .compare-cell > .relative.inline-block { display: block; width: 100%; }
-    .compare-cell select { width: 100%; min-width: 0 !important; }
+    /* Compare cells — make controls inside them fit the column width so long
+       option labels don't overflow into the next column. (Selects are now expanded
+       to radio lists inside the Compare-All modal, but if any survive, they flex.) */
+    .compare-cell > .relative.inline-block,
+    .compare-cell > .v5-select-wrap { display: block; width: 100%; }
     .compare-cell input[type="number"] { width: 100% !important; }
     /* Access mode picker grid — collapse to 2 cols on narrow screens, 1 col on phones. */
     @media (max-width: 900px) {
@@ -192,9 +192,26 @@
       position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px;
       background: var(--brand); border-radius: 2px;
     }
-    .preview-btn { background: var(--text); transition: background 0.15s; }
+    /* Primary (black) button — synced with style guide .btn-primary */
+    .preview-btn {
+      background: var(--text);
+      color: var(--on-text);
+      transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
     .preview-btn:hover { background: #000; transform: translateY(-1px); box-shadow: var(--shadow-md); }
-    .share-btn { background: var(--bg); color: var(--text-4); cursor: not-allowed; }
+    .preview-btn:active { background: #000; transform: translateY(0); box-shadow: var(--shadow-sm); }
+    .preview-btn:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
+    /* Soft disabled button — synced with style guide .btn-soft.is-disabled */
+    .share-btn {
+      background: var(--bg);
+      color: var(--text-4);
+      cursor: not-allowed;
+      transition: none;
+    }
+    .share-btn:disabled { cursor: not-allowed; }
+    /* Outline brand button hover — used by OutlineCtaBtn */
+    .outline-cta-btn:hover { background: var(--orange-soft) !important; border-color: var(--orange-deep) !important; color: var(--orange-deep) !important; }
+    .outline-cta-btn:active { transform: translateY(0); }
     /* ===== Radio button — synced with style guide (.radio-dot 18px) ===== */
     .radio-dot {
       width: 18px; height: 18px; border-radius: 999px;
@@ -329,6 +346,96 @@
     /* Underline tab — already keyed off .tab-btn.is-active, but harmonize the underline weight */
     .tab-btn.is-active::after { background: var(--orange) !important; height: 2px !important; bottom: -1px !important; }
 
+    /* ===== Select / dropdown — synced with ui-component-library §02 =====
+       Custom (not native) so we can render the popover, hover, selected highlight,
+       and check icon exactly as specified. */
+    .v5-select-wrap { position: relative; }
+    .v5-select-btn {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      padding: 9px 12px 9px 14px;
+      font: inherit;
+      font-size: 13.5px;
+      font-family: inherit;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .v5-select-btn:hover:not(:disabled):not(.is-open) { border-color: var(--text-4); }
+    .v5-select-btn:focus,
+    .v5-select-btn.is-open {
+      border-color: var(--orange) !important;
+      box-shadow: 0 0 0 3px rgba(242,107,58,0.18);
+      outline: none;
+    }
+    .v5-select-btn:disabled {
+      background: var(--bg);
+      color: var(--text-4);
+      cursor: not-allowed;
+      border-color: var(--line-2);
+    }
+    /* Value text — truncate with ellipsis so long labels don't cover the chevron */
+    .v5-select-value {
+      flex: 1 1 auto; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .v5-select-chev {
+      flex: 0 0 auto;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px;
+      color: var(--text-3);
+      transition: transform .2s, opacity .15s;
+    }
+    .v5-select-chev.is-open { transform: rotate(180deg); }
+    .v5-select-btn:disabled .v5-select-chev { opacity: 0.5; }
+    /* Popover menu — matches §02 spec */
+    .v5-select-menu {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: var(--surface-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      padding: 6px;
+      box-shadow: var(--shadow-lg);
+      z-index: 50;
+      max-height: 320px;
+      overflow-y: auto;
+      animation: popIn 0.12s ease-out;
+      transform-origin: top center;
+    }
+    .v5-select-option {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 10px;
+      border-radius: var(--r-xs);
+      font-size: 13px; color: var(--text-2);
+      cursor: pointer;
+      transition: background-color .12s, color .12s;
+    }
+    .v5-select-option-label {
+      flex: 1 1 auto; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .v5-select-option-check {
+      flex: 0 0 auto;
+      width: 14px; height: 14px;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-left: auto;
+    }
+    .v5-select-option:hover { background: var(--bg-hover); color: var(--text); }
+    .v5-select-option.is-selected {
+      background: var(--orange-soft);
+      color: var(--orange-deep);
+      font-weight: 500;
+    }
+    .v5-select-option.is-selected:hover { background: var(--orange-soft); color: var(--orange-deep); }
+    /* In the Compare-All modal, selects collapse to radio lists, so the wrap is
+       rarely used there — but if it appears, keep it flexing to fill the column */
+    .compare-cell .v5-select-wrap { display: block; width: 100%; min-width: 0 !important; }
+    .compare-cell .v5-select-btn { width: 100%; }
+
     /* Per-role rows have a uniform height on desktop so cells line up regardless
        of which control (dropdown vs. checkboxes vs. toggle) they contain. */
     .per-role-row { min-height: 55px; }
@@ -388,14 +495,18 @@
         min-height: 0 !important;
       }
       .per-role-row .control-cell { justify-content: flex-start !important; }
-      .per-role-row select { width: 100% !important; min-width: 0 !important; }
+      .per-role-row select,
+      .per-role-row .v5-select-wrap,
+      .per-role-row .v5-select-btn { width: 100% !important; min-width: 0 !important; }
       /* Shared row: stack */
       .shared-flat-row {
         grid-template-columns: 1fr !important;
         gap: 10px !important;
         align-items: stretch !important;
       }
-      .shared-flat-row select { width: 100% !important; min-width: 0 !important; }
+      .shared-flat-row select,
+      .shared-flat-row .v5-select-wrap,
+      .shared-flat-row .v5-select-btn { width: 100% !important; min-width: 0 !important; }
       .shared-flat-row .control-end { justify-content: flex-start !important; }
       /* Customize per role band wraps */
       .panel-strip { flex-wrap: wrap; row-gap: 8px; }
@@ -477,6 +588,7 @@
     const CopyIcon = ({ size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>;
     const TrashIcon = ({ size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></svg>;
     const PlusUserIcon = ({ size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M16 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M3 21c0-4 3.5-6 7-6"/><path d="M19 14v6M16 17h6"/></svg>;
+    const CheckIcon = ({ size = 14 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>;
     const BellIcon = (p) => <Icon {...p} d={["M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9","M9 21a3 3 0 0 0 6 0"]} />;
     const BookIcon = (p) => <Icon {...p} d={["M4 4h13a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z","M4 4v13"]} />;
     const DashIcon = (p) => <Icon {...p} d={["M3 12l9-9 9 9","M5 10v10h14V10"]} />;
@@ -713,6 +825,58 @@
       );
     };
 
+    // ===== Custom select / dropdown =====
+    // Matches the ui-component-library §02 spec: pill trigger with chevron, popover
+    // menu with selected-option highlight in --orange-soft + check icon, hover state,
+    // click-outside to close. Replaces native <select> so the open state matches.
+    const V5Select = ({ value, options, onChange, disabled, minWidth = 220, fullWidth }) => {
+      const [open, setOpen] = useState(false);
+      const wrapRef = React.useRef(null);
+      useEffect(() => {
+        if (!open) return;
+        const onDoc = (e) => {
+          if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onDoc);
+        document.addEventListener('keydown', onKey);
+        return () => {
+          document.removeEventListener('mousedown', onDoc);
+          document.removeEventListener('keydown', onKey);
+        };
+      }, [open]);
+      const display = value || (options && options[0]) || '';
+      return (
+        <div ref={wrapRef}
+          className={`v5-select-wrap relative ${fullWidth ? 'block w-full' : 'inline-block'}`}
+          style={fullWidth ? {} : { minWidth }}>
+          <button type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open}
+            onClick={(e) => { e.stopPropagation(); if (!disabled) setOpen(o => !o); }}
+            className={`v5-select-btn ${open ? 'is-open' : ''}`}>
+            <span className="v5-select-value">{display}</span>
+            <span className={`v5-select-chev ${open ? 'is-open' : ''}`}><ChevronDown size={14} /></span>
+          </button>
+          {open && (
+            <div className="v5-select-menu" role="listbox">
+              {options.map(o => {
+                const selected = o === value;
+                return (
+                  <div key={o} role="option" aria-selected={selected}
+                    className={`v5-select-option ${selected ? 'is-selected' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); onChange(o); setOpen(false); }}>
+                    <span className="v5-select-option-label">{o}</span>
+                    <span className="v5-select-option-check">
+                      {selected && <CheckIcon size={14} />}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    };
+
     // ===== App chrome =====
     const NAV_ITEMS = [
       { id: 'dashboard', name: 'Dashboard', icon: DashIcon },
@@ -805,8 +969,8 @@
             </div>
           </div>
           <div className="gallery-header-actions flex items-center gap-2">
-            <button className="preview-btn flex items-center gap-2 text-[13px] font-semibold text-white px-5 py-2 rounded-md">Preview</button>
-            <button className="share-btn flex items-center gap-2 text-[13px] font-semibold px-4 py-2 rounded-md">
+            <button className="preview-btn flex items-center gap-2 text-[13.5px] font-semibold text-white rounded-full" style={{ padding: '10px 18px', letterSpacing: '-0.01em' }}>Preview</button>
+            <button className="share-btn flex items-center gap-2 text-[13.5px] font-semibold rounded-full" disabled style={{ padding: '10px 16px', letterSpacing: '-0.01em' }}>
               Share <ChevronDown size={12} />
             </button>
           </div>
@@ -1052,7 +1216,7 @@
                 </div>
                 <div className="flex justify-end mt-5">
                   <button onClick={onClose}
-                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-md border bg-white"
+                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-full border bg-white transition-all hover:bg-[var(--bg)]"
                     style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)' }}>CANCEL</button>
                 </div>
               </>
@@ -1066,17 +1230,17 @@
                   onChange={e => setCustomName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && trimmed && !nameTaken) goDetail('custom'); }}
                   placeholder="e.g. Family, VIP, Player" maxLength={32}
-                  className="w-full text-[14px] px-3 py-2.5 rounded-md border bg-white outline-none"
+                  className="w-full text-[14px] px-3 py-2.5 rounded-[10px] border bg-white outline-none"
                   style={{ borderColor: nameTaken ? 'var(--brand)' : 'var(--card-border)', color: 'var(--text-primary)' }} />
                 {nameTaken && <p className="text-[12px] mt-2" style={{ color: 'var(--brand-deep)' }}>A role named "{trimmed}" already exists.</p>}
                 <div className="flex justify-end gap-2 mt-5">
                   <button onClick={() => setStep('choose')}
-                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-md border bg-white"
+                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-full border bg-white transition-all hover:bg-[var(--bg)]"
                     style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)' }}>BACK</button>
                   <button disabled={!trimmed || nameTaken}
                     onClick={() => goDetail('custom')}
-                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-md text-white disabled:opacity-40"
-                    style={{ background: 'var(--brand)' }}>NEXT</button>
+                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-full text-white disabled:opacity-40 transition-all"
+                    style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-sm)' }}>NEXT</button>
                 </div>
               </>
             )}
@@ -1101,11 +1265,11 @@
                 />
                 <div className="flex justify-end gap-2 mt-5">
                   <button onClick={onClose}
-                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-md border bg-white"
+                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-full border bg-white transition-all hover:bg-[var(--bg)]"
                     style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)' }}>CANCEL</button>
                   <button onClick={submit}
-                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-md text-white"
-                    style={{ background: 'var(--brand)' }}>CREATE ROLE</button>
+                    className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-full text-white transition-all"
+                    style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-sm)' }}>CREATE ROLE</button>
                 </div>
               </>
             )}
@@ -1353,17 +1517,13 @@
       }
       if (s.type === 'select') {
         return (
-          <div className="relative inline-block">
-            <select value={value || ''} disabled={disabled}
-              onChange={(e) => onChange(e.target.value)}
-              className="text-[13px] rounded-md border bg-white pl-3 pr-9 py-2 outline-none appearance-none"
-              style={{ borderColor: 'var(--card-border)', minWidth: compact ? 200 : 220, color: 'var(--text-primary)' }}>
-              {s.options.map(o => <option key={o}>{o}</option>)}
-            </select>
-            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-secondary)' }}>
-              <ChevronDown size={12} />
-            </div>
-          </div>
+          <V5Select
+            value={value || ''}
+            options={s.options}
+            disabled={disabled}
+            onChange={onChange}
+            minWidth={compact ? 220 : 240}
+          />
         );
       }
       if (s.type === 'multicheck') {
@@ -1595,7 +1755,7 @@
     // Outlined orange action button used for "Set per role" / "Match across roles"
     const OutlineCtaBtn = ({ onClick, children }) => (
       <button onClick={onClick}
-        className="text-[12px] font-medium px-4 py-2 rounded-md border transition-colors"
+        className="outline-cta-btn text-[12px] font-medium px-4 py-2 rounded-full border transition-all"
         style={{ borderColor: 'var(--brand)', background: 'var(--brand-cream)', color: 'var(--brand)' }}>
         {children}
       </button>
@@ -2060,8 +2220,8 @@
               style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
               <span>Changes save automatically and apply immediately.</span>
               <button onClick={onClose}
-                className="text-[12px] font-bold tracking-wider uppercase px-4 py-2 rounded-md text-white"
-                style={{ background: 'var(--brand)' }}>
+                className="text-[12px] font-bold tracking-wider uppercase px-4 py-2 rounded-full text-white transition-all"
+                style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-sm)' }}>
                 Done
               </button>
             </footer>
@@ -2113,8 +2273,8 @@
           </div>
           <footer className="border-t bg-white p-3 shrink-0" style={{ borderColor: 'var(--card-border)' }}>
             <button onClick={onClose}
-              className="w-full text-[12px] font-bold tracking-wider px-4 py-3 rounded-md text-white"
-              style={{ background: 'var(--brand)' }}>
+              className="w-full text-[12px] font-bold tracking-wider px-4 py-3 rounded-full text-white transition-all"
+              style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-sm)' }}>
               DONE
             </button>
           </footer>
@@ -2277,8 +2437,8 @@
 
       const SolidBtn = ({ onClick, children, disabled }) => (
         <button onClick={onClick} disabled={disabled}
-          className="text-[12px] font-bold tracking-wider px-4 py-2.5 rounded-md text-white disabled:opacity-40 transition-opacity"
-          style={{ background: 'var(--brand)' }}>
+          className="text-[12px] font-bold tracking-wider px-4 py-2.5 rounded-full text-white disabled:opacity-40 transition-all"
+          style={{ background: 'var(--brand)', boxShadow: disabled ? 'none' : 'var(--shadow-sm)' }}>
           {children}
         </button>
       );
@@ -2350,7 +2510,7 @@
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); canAdd && setMoreOpen(o => !o); }}
                       disabled={!canAdd}
-                      className="flex items-center gap-2 text-[12px] font-bold tracking-wider px-4 py-2.5 rounded-md border bg-white disabled:opacity-40 transition-opacity"
+                      className="flex items-center gap-2 text-[12px] font-bold tracking-wider px-4 py-2.5 rounded-full border bg-white disabled:opacity-40 transition-all hover:bg-[var(--orange-soft)]"
                       style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}>
                       MORE ROLES <ChevronDown size={11} />
                     </button>
