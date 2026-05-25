@@ -392,15 +392,15 @@
     }
     .v5-select-chev.is-open { transform: rotate(180deg); }
     .v5-select-btn:disabled .v5-select-chev { opacity: 0.5; }
-    /* Popover menu — matches §02 spec */
+    /* Popover menu — matches §02 spec.
+       Rendered through a React portal at document.body with position:fixed so it
+       escapes overflow:hidden ancestors (e.g. the rounded per-role settings card). */
     .v5-select-menu {
-      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
       background: var(--surface-elev);
       border: 1px solid var(--line);
       border-radius: var(--r-md);
       padding: 6px;
       box-shadow: var(--shadow-lg);
-      z-index: 50;
       max-height: 320px;
       overflow-y: auto;
       animation: popIn 0.12s ease-out;
@@ -828,51 +828,97 @@
     // ===== Custom select / dropdown =====
     // Matches the ui-component-library §02 spec: pill trigger with chevron, popover
     // menu with selected-option highlight in --orange-soft + check icon, hover state,
-    // click-outside to close. Replaces native <select> so the open state matches.
+    // click-outside to close. The popover is rendered through a React portal at
+    // document.body so it escapes any overflow:hidden / clip ancestors (e.g. the
+    // rounded per-role settings card). Coordinates are computed from the trigger's
+    // getBoundingClientRect() and re-measured on scroll / resize.
     const V5Select = ({ value, options, onChange, disabled, minWidth = 220, fullWidth }) => {
       const [open, setOpen] = useState(false);
+      const [pos, setPos] = useState(null); // { top, left, width, openUp }
       const wrapRef = React.useRef(null);
+      const btnRef = React.useRef(null);
+      const menuRef = React.useRef(null);
+
+      const measure = React.useCallback(() => {
+        const btn = btnRef.current;
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        const menuMaxH = 320; // matches CSS max-height
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const openUp = spaceBelow < Math.min(menuMaxH, 240) && rect.top > spaceBelow;
+        setPos({
+          left: rect.left,
+          top: openUp ? rect.top - 6 : rect.bottom + 6,
+          width: rect.width,
+          openUp,
+        });
+      }, []);
+
       useEffect(() => {
         if (!open) return;
+        measure();
         const onDoc = (e) => {
-          if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+          if (
+            (wrapRef.current && wrapRef.current.contains(e.target)) ||
+            (menuRef.current && menuRef.current.contains(e.target))
+          ) return;
+          setOpen(false);
         };
         const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        const onReflow = () => measure();
         document.addEventListener('mousedown', onDoc);
         document.addEventListener('keydown', onKey);
+        window.addEventListener('scroll', onReflow, true);
+        window.addEventListener('resize', onReflow);
         return () => {
           document.removeEventListener('mousedown', onDoc);
           document.removeEventListener('keydown', onKey);
+          window.removeEventListener('scroll', onReflow, true);
+          window.removeEventListener('resize', onReflow);
         };
-      }, [open]);
+      }, [open, measure]);
+
       const display = value || (options && options[0]) || '';
+      const menuStyle = pos
+        ? {
+            position: 'fixed',
+            top: pos.openUp ? 'auto' : pos.top,
+            bottom: pos.openUp ? (window.innerHeight - pos.top) : 'auto',
+            left: pos.left,
+            width: pos.width,
+            zIndex: 1000,
+          }
+        : { display: 'none' };
+      const menu = open ? ReactDOM.createPortal(
+        <div ref={menuRef} className="v5-select-menu" role="listbox" style={menuStyle}>
+          {options.map(o => {
+            const selected = o === value;
+            return (
+              <div key={o} role="option" aria-selected={selected}
+                className={`v5-select-option ${selected ? 'is-selected' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onChange(o); setOpen(false); }}>
+                <span className="v5-select-option-label">{o}</span>
+                <span className="v5-select-option-check">
+                  {selected && <CheckIcon size={14} />}
+                </span>
+              </div>
+            );
+          })}
+        </div>,
+        document.body
+      ) : null;
+
       return (
         <div ref={wrapRef}
           className={`v5-select-wrap relative ${fullWidth ? 'block w-full' : 'inline-block'}`}
           style={fullWidth ? {} : { minWidth }}>
-          <button type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open}
+          <button ref={btnRef} type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open}
             onClick={(e) => { e.stopPropagation(); if (!disabled) setOpen(o => !o); }}
             className={`v5-select-btn ${open ? 'is-open' : ''}`}>
             <span className="v5-select-value">{display}</span>
             <span className={`v5-select-chev ${open ? 'is-open' : ''}`}><ChevronDown size={14} /></span>
           </button>
-          {open && (
-            <div className="v5-select-menu" role="listbox">
-              {options.map(o => {
-                const selected = o === value;
-                return (
-                  <div key={o} role="option" aria-selected={selected}
-                    className={`v5-select-option ${selected ? 'is-selected' : ''}`}
-                    onClick={(e) => { e.stopPropagation(); onChange(o); setOpen(false); }}>
-                    <span className="v5-select-option-label">{o}</span>
-                    <span className="v5-select-option-check">
-                      {selected && <CheckIcon size={14} />}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {menu}
         </div>
       );
     };
