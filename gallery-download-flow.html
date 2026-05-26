@@ -178,6 +178,19 @@
     transition: transform 0.4s;
   }
   .photo:hover img { transform: scale(1.03); }
+  /* Password = view protection: image hidden behind a grey placeholder + lock */
+  .photo.locked-view {
+    background: #d8d8db;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .photo.locked-view svg {
+    width: 48px;
+    height: 48px;
+    color: #9a9a9a;
+    stroke-width: 1.5;
+  }
   .photo .badges {
     position: absolute;
     top: 10px;
@@ -866,30 +879,37 @@
     g.innerHTML = "";
     PHOTOS.forEach((p, i) => {
       const el = document.createElement("div");
-      el.className = "photo" + (i % 4 === 1 ? " tall" : "");
-      const badges = computeBadges(p);
-      el.innerHTML = `
-        <img src="${imgUrl(p.seed)}" alt="${p.title}" loading="lazy" />
-        <div class="badges">${badges}</div>
-      `;
+      // Password protection = VIEW gate. When the toggle is on, the photo
+      // is hidden behind a grey lock placeholder until the guest unlocks it.
+      const isViewLocked = p.protection === "password" && state.flags.imagePassword;
+      const classes = ["photo"];
+      if (i % 4 === 1) classes.push("tall");
+      if (isViewLocked) classes.push("locked-view");
+      el.className = classes.join(" ");
+
+      if (isViewLocked) {
+        el.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+        `;
+      } else {
+        const badges = computeBadges(p);
+        el.innerHTML = `
+          <img src="${imgUrl(p.seed)}" alt="${p.title}" loading="lazy" />
+          <div class="badges">${badges}</div>
+        `;
+      }
       g.appendChild(el);
     });
   }
 
   function computeBadges(photo) {
+    // PIN is DOWNLOAD-ONLY — the photo is fully viewable, so no grid badge.
+    // Password swaps the thumbnail entirely (handled in renderGallery).
+    // Only role gets a grid badge here.
     const out = [];
-    if (photo.protection === "password" && state.flags.imagePassword) {
-      out.push(`<span class="badge lock">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-        Password
-      </span>`);
-    }
-    if (photo.protection === "pin" && state.flags.imagePin) {
-      out.push(`<span class="badge pin">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="16" r="1"/></svg>
-        PIN
-      </span>`);
-    }
     if (photo.protection === "role" && state.flags.unauthorized) {
       out.push(`<span class="badge role">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2"/></svg>
@@ -1054,11 +1074,17 @@
     // ---- gallery-wide ----
     if (state.flags.galleryPin && !state.galleryPinPassed) queue.push("galleryPin");
 
-    // ---- per-image (login first: identity check before per-asset secrets) ----
+    // ---- per-image (role gate first: identity-check before per-asset secrets) ----
     const pwImages = PHOTOS.filter(p => p.protection === "password");
     const pinImages = PHOTOS.filter(p => p.protection === "pin");
-    if (state.flags.loginRequired && !state.signedIn && !state.roleSkipped) queue.push("login");
-    if (state.flags.unauthorized && state.flags.loginRequired && !state.roleSkipped) queue.push("unauthorized");
+    // The role-gate modal fires when login is required and the guest either
+    // isn't signed in yet OR is signed in but the test "unauthorized" toggle
+    // says their account still doesn't qualify. The sign-in form is a
+    // sub-flow inside that modal, not a separate queue step.
+    const shouldShowRoleGate = state.flags.loginRequired
+      && !state.roleSkipped
+      && (!state.signedIn || state.flags.unauthorized);
+    if (shouldShowRoleGate) queue.push("login");
     if (state.flags.imagePassword && pwImages.length && !state.imagePasswordPassed) queue.push("imagePassword");
     if (state.flags.imagePin && pinImages.length && !state.imagePinPassed) queue.push("imagePin");
 
@@ -1074,7 +1100,6 @@
     switch (next) {
       case "galleryPin":     return showGalleryPinModal(proceed, abort);
       case "login":          return showLoginModal(proceed, abort);
-      case "unauthorized":   return showUnauthorizedModal(proceed, abort);
       case "imagePassword":  return showImagePasswordModal(proceed, abort);
       case "imagePin":       return showImagePinModal(proceed, abort);
       case "download":       return showDownloadProgress();
@@ -1089,7 +1114,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         </div>
         <p class="modal-eyebrow">Miguel Mendes Photography</p>
-        <h2 class="modal-title">This gallery is PIN protected.</h2>
+        <h2 class="modal-title">This gallery download is PIN protected.</h2>
         <p class="modal-text">Enter the 4-digit PIN the photographer shared with you.</p>
         <div class="pin-row" id="pinRow">
           <input class="pin-input" maxlength="1" data-i="0" inputmode="numeric" />
@@ -1098,8 +1123,8 @@
           <input class="pin-input" maxlength="1" data-i="3" inputmode="numeric" />
         </div>
         <p class="field-error" id="pinError">That PIN doesn't match. Try again.</p>
-        <button class="btn-primary" id="submitPin">Unlock gallery</button>
-        <button class="btn-link" id="forgotPin">I don't have a PIN</button>
+        <button class="btn-primary" id="submitPin">Download gallery</button>
+        <button class="btn-secondary" id="cancelPin">Cancel</button>
       </div>
       <div class="modal-footer">
         <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
@@ -1118,8 +1143,8 @@
         document.getElementById("pinError").classList.add("show");
       }
     };
-    document.getElementById("forgotPin").onclick = () => {
-      alert("In production: shows a message to contact the photographer.");
+    document.getElementById("cancelPin").onclick = () => {
+      closeModal();
     };
     setTimeout(() => document.querySelector(".pin-input").focus(), 50);
   }
@@ -1196,105 +1221,96 @@
     };
   }
 
-  // ---------- Modal: Login (per-image role gate) ----------
+  // ---------- Modal: Role gate (the entry modal for per-image role checks) ----------
+  // This is the FIRST per-image gate. It's the download-first choice screen.
+  // Sign-in is a sub-flow, fired only when the guest taps "Sign in with a
+  // different account". If they sign in but the test toggle says they're
+  // still unauthorized, we loop back to this modal.
   function showLoginModal(onNext, onCancel) {
     const roleImages = PHOTOS.filter(p => p.protection === "role");
-    showModal(`
-      <div class="modal-body">
-        <div class="modal-icon role">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2"/></svg>
-        </div>
-        <p class="modal-eyebrow">Protected Images</p>
-        <h2 class="modal-title">${roleImages.length} of ${PHOTOS.length} photos need an authorized account.</h2>
-        <p class="modal-text">Sign in to include them, or skip to download just the public photos.</p>
-        <input type="email" class="field" id="loginEmail" placeholder="Email address" value="${state.user ? state.user.email : ''}" />
-        <input type="password" class="field" id="loginPw" placeholder="Password" />
-        <button class="btn-primary" id="submitLogin">Sign in &amp; include</button>
-        <button class="btn-secondary" id="skipLogin">Skip ${roleImages.length === 1 ? "this photo" : `these ${roleImages.length} photos`}</button>
-        <button class="btn-link" id="forgotLogin">Forgot password?</button>
-      </div>
-      <div class="modal-footer">
-        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
-      </div>
-    `);
-    document.getElementById("loginEmail").focus();
-    document.getElementById("submitLogin").onclick = () => {
-      const email = document.getElementById("loginEmail").value.trim();
-      const pw = document.getElementById("loginPw").value.trim();
-      if (!email || !pw) {
-        shakeModal();
-        return;
-      }
-      state.signedIn = true;
-      state.user = { email, name: email.split("@")[0] };
-      updateStatus();
-      onNext();
-    };
-    document.getElementById("skipLogin").onclick = () => {
-      // Guest declines to sign in -> role-protected photos are skipped
-      // and the upcoming unauthorized modal is bypassed.
-      state.roleSkipped = true;
-      roleImages.forEach(p => {
-        if (!state.skippedImages.some(s => s.id === p.id)) {
-          state.skippedImages.push({ ...p, reason: "role" });
-        }
-      });
-      onNext();
-    };
-    document.getElementById("forgotLogin").onclick = () => {
-      alert("In production: opens the password reset flow.");
-    };
-  }
+    const isOne = roleImages.length === 1;
+    const downloadableCount = PHOTOS.length - roleImages.length;
+    const downloadLabel = downloadableCount === 1 ? "Download 1 photo" : `Download ${downloadableCount} photos`;
+    const signInLabel = state.signedIn ? "Sign in with a different account" : "Sign in with a different account";
 
-  // ---------- Modal: Unauthorized role ----------
-  function showUnauthorizedModal(onNext, onCancel) {
-    const initials = state.user ? state.user.email.slice(0, 2).toUpperCase() : "??";
-    const roleImages = PHOTOS.filter(p => p.protection === "role");
-    showModal(`
-      <div class="modal-body">
-        <div class="modal-icon lock">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-        </div>
-        <p class="modal-eyebrow">Protected Images</p>
-        <h2 class="modal-title">Your account isn't authorized for ${roleImages.length === 1 ? "1 of these photos" : `${roleImages.length} of these photos`}.</h2>
-        <p class="modal-text">You're signed in, but ${roleImages.length === 1 ? "this photo is" : "these photos are"} limited to specific guests.</p>
-        <div class="you-account">
-          <div class="avatar">${initials}</div>
-          <div class="info">
-            <div class="name">Signed in as</div>
-            <div class="email">${state.user ? state.user.email : ''}</div>
+    const showRoleGate = () => {
+      showModal(`
+        <div class="modal-body">
+          <div class="modal-icon success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           </div>
+          <p class="modal-eyebrow">Protected Images</p>
+          <h2 class="modal-title">You're about to download ${downloadableCount} of ${PHOTOS.length} photos.</h2>
+          <p class="modal-text">${roleImages.length} ${isOne ? "photo is" : "photos are"} limited to specific roles.</p>
+          <button class="btn-primary" id="downloadPublic">${downloadLabel}</button>
+          <button class="btn-secondary" id="goSignIn">${signInLabel}</button>
+          <button class="btn-link" id="contactOwner">Request access from photographer</button>
         </div>
-        <button class="btn-primary" id="switchAccount">Sign in with a different account</button>
-        <button class="btn-secondary" id="skipUnauth">Skip ${roleImages.length === 1 ? "this photo" : `these ${roleImages.length} photos`}</button>
-        <button class="btn-link" id="contactOwner">Request access from photographer</button>
-      </div>
-      <div class="modal-footer">
-        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
-      </div>
-    `);
-    document.getElementById("switchAccount").onclick = () => {
-      state.signedIn = false; state.user = null;
-      updateStatus();
-      showLoginModal(() => {
-        // After re-login, if "unauthorized" flag is still on, show this modal again.
-        if (state.flags.unauthorized && !state.roleSkipped) showUnauthorizedModal(onNext, onCancel);
-        else onNext();
-      }, onCancel);
+        <div class="modal-footer">
+          <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+        </div>
+      `);
+      document.getElementById("downloadPublic").onclick = () => {
+        state.roleSkipped = true;
+        roleImages.forEach(p => {
+          if (!state.skippedImages.some(s => s.id === p.id)) {
+            state.skippedImages.push({ ...p, reason: "role" });
+          }
+        });
+        onNext();
+      };
+      document.getElementById("goSignIn").onclick = showSignInForm;
+      document.getElementById("contactOwner").onclick = () => {
+        alert("In production: opens a 'Request access' form sent to the photographer.");
+        closeModal();
+      };
     };
-    document.getElementById("skipUnauth").onclick = () => {
-      state.roleSkipped = true;
-      roleImages.forEach(p => {
-        if (!state.skippedImages.some(s => s.id === p.id)) {
-          state.skippedImages.push({ ...p, reason: "role" });
+
+    const showSignInForm = () => {
+      showModal(`
+        <div class="modal-body">
+          <div class="modal-icon role">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2"/></svg>
+          </div>
+          <p class="modal-eyebrow">Sign In</p>
+          <h2 class="modal-title">Sign in with a different account.</h2>
+          <p class="modal-text">Use an account authorized for the protected ${isOne ? "photo" : "photos"}.</p>
+          <input type="email" class="field" id="loginEmail" placeholder="Email address" value="${state.user ? state.user.email : ''}" />
+          <input type="password" class="field" id="loginPw" placeholder="Password" />
+          <button class="btn-primary" id="submitLogin">Sign in &amp; include</button>
+          <button class="btn-secondary" id="backToChoice">Back</button>
+          <button class="btn-link" id="forgotLogin">Forgot password?</button>
+        </div>
+        <div class="modal-footer">
+          <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+        </div>
+      `);
+      setTimeout(() => document.getElementById("loginEmail").focus(), 50);
+      document.getElementById("submitLogin").onclick = () => {
+        const email = document.getElementById("loginEmail").value.trim();
+        const pw = document.getElementById("loginPw").value.trim();
+        if (!email || !pw) {
+          shakeModal();
+          return;
         }
-      });
-      onNext();
+        state.signedIn = true;
+        state.user = { email, name: email.split("@")[0] };
+        updateStatus();
+        // If the dev toggle says the account still isn't authorized, loop
+        // back to the role-gate modal so the guest sees the choice again.
+        if (state.flags.unauthorized) {
+          showRoleGate();
+        } else {
+          onNext();
+        }
+      };
+      document.getElementById("backToChoice").onclick = showRoleGate;
+      document.getElementById("forgotLogin").onclick = () => {
+        alert("In production: opens the password reset flow.");
+      };
     };
-    document.getElementById("contactOwner").onclick = () => {
-      alert("In production: opens a 'Request access' form sent to the photographer.");
-      closeModal();
-    };
+
+    showRoleGate(); // entry point
   }
 
   // ---------- Modal: Image password ----------
