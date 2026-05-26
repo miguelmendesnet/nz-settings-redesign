@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HelloWorldGallery — Download Flow Prototype</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f6f6f6;
+    --text: #4a4a4a;
+    --text-soft: #9a9a9a;
+    --text-strong: #2e2e2e;
+    --border: #e5e5e5;
+    --border-soft: #efefef;
+    --accent: #6FBA56;
+    --accent-hover: #5fa848;
+    --danger: #d0454c;
+    --danger-soft: #fbecec;
+    --overlay: rgba(40, 40, 40, 0.55);
+    --shadow-card: 0 18px 60px rgba(0, 0, 0, 0.18);
+    --shadow-soft: 0 4px 18px rgba(0, 0, 0, 0.08);
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  /* ------- Hero / title ------- */
+  .hero {
+    text-align: center;
+    padding: 56px 24px 32px;
+  }
+  .hero .eyebrow {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--text-soft);
+    text-transform: uppercase;
+    margin: 0 0 18px;
+  }
+  .hero h1 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: 52px;
+    color: var(--text-strong);
+    margin: 0 0 14px;
+    letter-spacing: -0.5px;
+  }
+  .hero .date {
+    color: var(--text-soft);
+    font-size: 16px;
+    margin: 0;
+  }
+
+  /* ------- Header bar ------- */
+  .header {
+    border-top: 1px solid var(--border-soft);
+    border-bottom: 1px solid var(--border-soft);
+    padding: 22px 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    background: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .header-brand .name {
+    font-size: 14px;
+    letter-spacing: 2px;
+    color: var(--text);
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .header-brand .by {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--text-soft);
+    text-transform: uppercase;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .icon-btn {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    color: var(--text-soft);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+  }
+  .icon-btn:hover { color: var(--text-strong); background: var(--bg-soft); }
+  .icon-btn svg { width: 22px; height: 22px; stroke-width: 1.6; }
+  .shop-btn {
+    background: var(--accent);
+    color: white;
+    border: 0;
+    padding: 10px 28px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .shop-btn:hover { background: var(--accent-hover); }
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-soft);
+    border-left: 1px solid var(--border);
+    padding-left: 18px;
+  }
+  .search-wrap input {
+    border: 0;
+    background: transparent;
+    font-size: 14px;
+    color: var(--text);
+    width: 140px;
+    outline: none;
+  }
+  .search-wrap input::placeholder { color: var(--text-soft); }
+  .divider {
+    width: 1px;
+    height: 26px;
+    background: var(--border);
+  }
+
+  /* ------- Gallery grid ------- */
+  .gallery {
+    padding: 32px 24px 80px;
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 1000px) {
+    .gallery { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gallery { grid-template-columns: 1fr; }
+    .header { padding: 18px 20px; flex-wrap: wrap; }
+    .hero h1 { font-size: 38px; }
+  }
+  .photo {
+    position: relative;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--bg-soft);
+    aspect-ratio: 4 / 3;
+  }
+  .photo.tall { aspect-ratio: 3 / 4; }
+  .photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.4s;
+  }
+  .photo:hover img { transform: scale(1.03); }
+  .photo .badges {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .badge {
+    background: rgba(0, 0, 0, 0.65);
+    color: white;
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    backdrop-filter: blur(4px);
+  }
+  .badge svg { width: 11px; height: 11px; }
+  .badge.lock { background: rgba(208, 69, 76, 0.92); }
+  .badge.pin { background: rgba(245, 166, 35, 0.92); }
+  .badge.role { background: rgba(74, 144, 226, 0.92); }
+
+  /* ------- Floating dev panel ------- */
+  .dev-panel {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 340px;
+    background: #1f1f23;
+    color: #f1f1f1;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    font-family: var(--font-sans);
+    /* Sits above the overlay (z-index: 200) so the prototype
+       controls stay reachable even when a gate is showing. */
+    z-index: 300;
+    overflow: hidden;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+  .dev-panel.collapsed .dev-body { display: none; }
+  .dev-panel.collapsed { width: auto; }
+  .dev-header {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #2a2a30;
+    cursor: pointer;
+    user-select: none;
+  }
+  .dev-header h3 {
+    font-size: 12px;
+    margin: 0;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #f1f1f1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dev-header .pill {
+    background: var(--accent);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+  .dev-header .toggle-collapse {
+    background: transparent;
+    border: 0;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .dev-body {
+    padding: 16px 18px 18px;
+  }
+  .dev-section-title {
+    font-size: 10px;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: #9c9caa;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .dev-section-title::before {
+    content: "";
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    background: #4a4a55;
+  }
+  .dev-section-title.gallery-wide { color: #a8d590; }
+  .dev-section-title.gallery-wide::before { background: var(--accent); }
+  .dev-section-title.per-image { color: #f0c789; }
+  .dev-section-title.per-image::before { background: #f5a623; }
+  .dev-section-group { margin-bottom: 14px; }
+  .dev-toggles { display: flex; flex-direction: column; gap: 8px; }
+  .dev-toggle.gallery-wide { border-left: 3px solid var(--accent); padding-left: 10px; }
+  .dev-toggle.per-image { border-left: 3px solid #f5a623; padding-left: 10px; }
+  .dev-toggle {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    background: #2a2a30;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .dev-toggle:hover { background: #33333a; }
+  .dev-toggle .label { font-size: 13px; color: #f1f1f1; font-weight: 500; }
+  .dev-toggle .hint { font-size: 11px; color: #9c9caa; margin-top: 2px; line-height: 1.4; }
+  .switch {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute;
+    inset: 0;
+    background: #4a4a55;
+    border-radius: 999px;
+    transition: background 0.15s;
+  }
+  .switch .slider::before {
+    content: "";
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    top: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.15s;
+  }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(14px); }
+
+  .dev-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .preset-btn {
+    flex: 1 1 calc(50% - 6px);
+    background: transparent;
+    border: 1px solid #3a3a44;
+    color: #d5d5dc;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover { border-color: var(--accent); color: white; }
+
+  .dev-actions { display: flex; gap: 8px; }
+  .dev-actions button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 6px;
+    border: 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-reset {
+    background: #3a3a44;
+    color: white;
+  }
+  .btn-reset:hover { background: #4a4a55; }
+  .btn-trigger {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-trigger:hover { background: var(--accent-hover); }
+
+  .dev-status {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: #16161a;
+    border-radius: 8px;
+    font-size: 11px;
+    color: #9c9caa;
+    line-height: 1.55;
+    min-height: 36px;
+    border: 1px solid #2a2a30;
+  }
+  .dev-status .state-line { display: flex; justify-content: space-between; }
+  .dev-status .state-key { color: #6b6b76; }
+  .dev-status .state-val { color: #f1f1f1; font-weight: 500; }
+  .dev-credentials {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #16161a;
+    border-radius: 8px;
+    font-size: 10px;
+    color: #9c9caa;
+    line-height: 1.7;
+    border: 1px solid #2a2a30;
+  }
+  .dev-credentials b { color: #d5d5dc; font-weight: 600; }
+  .dev-credentials code {
+    background: #2a2a30;
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+  }
+
+  /* ------- Locked-page state (entry gate active) ------- */
+  body.gallery-locked .hero,
+  body.gallery-locked .header,
+  body.gallery-locked .gallery {
+    visibility: hidden;
+  }
+  body.gallery-locked {
+    background: #ececef;
+  }
+
+  /* ------- Modal ------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--overlay);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 24px;
+    animation: fadeIn 0.18s ease;
+  }
+  .overlay.show { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 540px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    animation: modalIn 0.22s ease;
+  }
+  .modal.shake { animation: shake 0.3s ease; }
+  .modal-body {
+    padding: 48px 48px 36px;
+    text-align: center;
+  }
+  .modal-eyebrow {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-soft);
+    margin: 0 0 16px;
+  }
+  .modal-title {
+    font-family: var(--font-serif);
+    font-size: 26px;
+    color: var(--text-strong);
+    margin: 0 0 14px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .modal-text {
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.55;
+    margin: 0 0 28px;
+  }
+  .modal-text .photo-count {
+    background: var(--bg-soft);
+    border-radius: 4px;
+    display: inline-block;
+    padding: 2px 8px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .field {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 15px;
+    color: var(--text-strong);
+    margin-bottom: 16px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+  }
+  .field:focus { border-color: var(--accent); }
+  .field.error { border-color: var(--danger); background: var(--danger-soft); }
+  .field-error {
+    color: var(--danger);
+    font-size: 12px;
+    margin: -8px 0 16px;
+    text-align: left;
+    display: none;
+  }
+  .field-error.show { display: block; }
+
+  .pin-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .pin-input {
+    width: 50px;
+    height: 60px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    text-align: center;
+    font-size: 22px;
+    color: var(--text-strong);
+    outline: none;
+    font-family: inherit;
+  }
+  .pin-input:focus { border-color: var(--accent); }
+  .pin-row.error .pin-input { border-color: var(--danger); background: var(--danger-soft); }
+
+  .btn-primary {
+    width: 100%;
+    background: #000;
+    color: white;
+    border: 0;
+    padding: 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: #1f1f1f; }
+  .btn-primary.muted {
+    background: #b5b5b5;
+  }
+  .btn-secondary {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 10px;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+  .btn-secondary:hover { background: var(--bg-soft); }
+  .btn-link {
+    background: transparent;
+    border: 0;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px;
+    margin-top: 12px;
+  }
+  .btn-link:hover { text-decoration: underline; }
+
+  .modal-footer {
+    padding: 16px 48px 24px;
+    border-top: 1px solid var(--border-soft);
+    text-align: center;
+    color: var(--text-soft);
+    font-size: 12px;
+  }
+  .modal-footer a { color: var(--text-soft); text-decoration: none; margin: 0 6px; }
+  .modal-footer a:hover { text-decoration: underline; }
+
+  /* Unauthorized illustration */
+  .modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    background: var(--bg-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-soft);
+  }
+  .modal-icon.lock { background: #fbecec; color: var(--danger); }
+  .modal-icon.success { background: #e8f6e2; color: var(--accent); }
+  .modal-icon svg { width: 28px; height: 28px; }
+
+  /* Progress bar */
+  .progress-wrap {
+    width: 100%;
+    height: 6px;
+    background: var(--border-soft);
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 8px 0 14px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.25s ease;
+  }
+  .progress-detail {
+    color: var(--text-soft);
+    font-size: 12px;
+    margin: 0;
+  }
+  .progress-skipped {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: #fff8e6;
+    border-radius: 4px;
+    color: #8a6d2f;
+    font-size: 12px;
+    text-align: left;
+    line-height: 1.5;
+    border-left: 3px solid #f5a623;
+  }
+
+  .you-account {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-soft);
+    border-radius: 6px;
+    margin-bottom: 18px;
+    text-align: left;
+  }
+  .you-account .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #c0c5d2;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .you-account .info { flex: 1; }
+  .you-account .name { font-size: 13px; color: var(--text-strong); font-weight: 600; }
+  .you-account .email { font-size: 11px; color: var(--text-soft); }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <p class="eyebrow">Miguel Mendes Photography</p>
+  <h1>HelloWorldGallery</h1>
+  <p class="date">May 25, 2026</p>
+</section>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-brand">
+    <span class="name">HelloWorldGallery</span>
+    <span class="by">By Miguel Mendes Photography</span>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" title="Favorites" aria-label="Favorites">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M23 19V8l-7-5-3 2.2L10 3 3 8v11a2 2 0 002 2h16a2 2 0 002-2z"/><circle cx="13" cy="13" r="3"/></svg>
+    </button>
+    <button class="icon-btn" id="downloadAllBtn" title="Download all" aria-label="Download all">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    </button>
+    <button class="icon-btn" title="Cart" aria-label="Cart">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 002 1.6h9.7a2 2 0 002-1.6L23 6H6"/></svg>
+    </button>
+    <button class="shop-btn">Shop</button>
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:18px;height:18px;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search Gallery" />
+    </div>
+    <div class="divider"></div>
+    <button class="icon-btn" id="loginBtn" title="Account" aria-label="Account">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- GALLERY GRID -->
+<section class="gallery" id="gallery"></section>
+
+<!-- FLOATING DEV PANEL -->
+<aside class="dev-panel" id="devPanel">
+  <div class="dev-header" id="devHeader">
+    <h3>
+      Prototype Controls
+      <span class="pill">Demo</span>
+    </h3>
+    <button class="toggle-collapse" id="toggleCollapse" title="Collapse">−</button>
+  </div>
+  <div class="dev-body">
+    <div class="dev-section-group">
+      <p class="dev-section-title gallery-wide">Gallery-wide gates</p>
+      <div class="dev-toggles">
+        <label class="dev-toggle gallery-wide">
+          <div>
+            <div class="label">Gallery access password</div>
+            <div class="hint">Required to view this gallery at all. Page is locked until passed.</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" data-flag="galleryAccessPassword" />
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <label class="dev-toggle gallery-wide">
+          <div>
+            <div class="label">Gallery download PIN</div>
+            <div class="hint">Prompted after clicking Download all.</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" data-flag="galleryPin" />
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="dev-section-group">
+      <p class="dev-section-title per-image">Per-image gates</p>
+      <div class="dev-toggles">
+        <label class="dev-toggle per-image">
+          <div>
+            <div class="label">Some images: password</div>
+            <div class="hint">2 images need an image-level password.</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" data-flag="imagePassword" />
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <label class="dev-toggle per-image">
+          <div>
+            <div class="label">Login required</div>
+            <div class="hint">Some images need an authenticated account.</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" data-flag="loginRequired" />
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <label class="dev-toggle per-image">
+          <div>
+            <div class="label">Account not authorized</div>
+            <div class="hint">After login, role check fails for this gallery.</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" data-flag="unauthorized" />
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <label class="dev-toggle per-image">
+          <div>
+            <div class="label">Some images: PIN</div>
+            <div class="hint">1 image needs an image-level PIN.</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" data-flag="imagePin" />
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <p class="dev-section-title">Quick Presets</p>
+    <div class="dev-presets">
+      <button class="preset-btn" data-preset="happy">Happy path</button>
+      <button class="preset-btn" data-preset="galleryPin">Gallery PIN</button>
+      <button class="preset-btn" data-preset="loginUnauth">Login + Unauth.</button>
+      <button class="preset-btn" data-preset="perImage">Per-image mix</button>
+      <button class="preset-btn" data-preset="everything">Worst case</button>
+      <button class="preset-btn" data-preset="reset">Clear toggles</button>
+    </div>
+
+    <div class="dev-actions">
+      <button class="btn-reset" id="resetBtn">↺ Start over</button>
+      <button class="btn-trigger" id="triggerBtn">↓ Download all</button>
+    </div>
+
+    <div class="dev-status" id="devStatus">
+      <div class="state-line"><span class="state-key">Gallery entry</span><span class="state-val" id="stateEntry">Open</span></div>
+      <div class="state-line"><span class="state-key">Download unlocked</span><span class="state-val" id="stateGalleryUnlocked">No</span></div>
+      <div class="state-line"><span class="state-key">Signed in</span><span class="state-val" id="stateSignedIn">No</span></div>
+      <div class="state-line"><span class="state-key">Active gates</span><span class="state-val" id="stateGates">0</span></div>
+    </div>
+
+    <div class="dev-credentials">
+      <b>Test credentials</b><br/>
+      Gallery access password: <code>welcome</code><br/>
+      Gallery download PIN: <code>1234</code><br/>
+      Image password: <code>photo123</code> · Image PIN: <code>9999</code><br/>
+      Login: any email + password. Authorization is set by the toggle above.
+    </div>
+  </div>
+</aside>
+
+<!-- MODAL OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+  // ---------- Test credentials ----------
+  const CREDS = {
+    galleryAccessPassword: "welcome",
+    galleryPin: "1234",
+    imagePassword: "photo123",
+    imagePin: "9999",
+  };
+
+  // ---------- Gallery data ----------
+  // protection: "password" | "pin" | "role" | null
+  const PHOTOS = [
+    { id: 1, title: "Coffee & Spices",    seed: "gallery-mm-01", protection: null },
+    { id: 2, title: "Behind the Camera",  seed: "gallery-mm-02", protection: null },
+    { id: 3, title: "Star Anise",         seed: "gallery-mm-03", protection: "password" },
+    { id: 4, title: "Mirror Façade",      seed: "gallery-mm-04", protection: null },
+    { id: 5, title: "Morning Pour",       seed: "gallery-mm-05", protection: "pin" },
+    { id: 6, title: "Cinnamon Bark",      seed: "gallery-mm-06", protection: null },
+    { id: 7, title: "Editor's Desk",      seed: "gallery-mm-07", protection: "role" },
+    { id: 8, title: "Bokeh Study",        seed: "gallery-mm-08", protection: "password" },
+    { id: 9, title: "Field Notes",        seed: "gallery-mm-09", protection: null },
+  ];
+
+  const imgUrl = seed => `https://picsum.photos/seed/${seed}/600/600`;
+
+  // ---------- App state ----------
+  const state = {
+    flags: {
+      galleryAccessPassword: false,
+      galleryPin: false,
+      loginRequired: false,
+      unauthorized: false,
+      imagePassword: false,
+      imagePin: false,
+    },
+    signedIn: false,
+    user: null,
+    galleryAccessPassed: false,
+    galleryPinPassed: false,
+    imagePasswordPassed: false,
+    imagePinPassed: false,
+    roleSkipped: false,    // guest opted out of role-protected photos
+    skippedImages: [],
+  };
+
+  // ---------- Render gallery ----------
+  function renderGallery() {
+    const g = document.getElementById("gallery");
+    g.innerHTML = "";
+    PHOTOS.forEach((p, i) => {
+      const el = document.createElement("div");
+      el.className = "photo" + (i % 4 === 1 ? " tall" : "");
+      const badges = computeBadges(p);
+      el.innerHTML = `
+        <img src="${imgUrl(p.seed)}" alt="${p.title}" loading="lazy" />
+        <div class="badges">${badges}</div>
+      `;
+      g.appendChild(el);
+    });
+  }
+
+  function computeBadges(photo) {
+    const out = [];
+    if (photo.protection === "password" && state.flags.imagePassword) {
+      out.push(`<span class="badge lock">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Password
+      </span>`);
+    }
+    if (photo.protection === "pin" && state.flags.imagePin) {
+      out.push(`<span class="badge pin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="16" r="1"/></svg>
+        PIN
+      </span>`);
+    }
+    if (photo.protection === "role" && state.flags.unauthorized) {
+      out.push(`<span class="badge role">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2"/></svg>
+        Members only
+      </span>`);
+    }
+    return out.join("");
+  }
+
+  // ---------- Dev panel wiring ----------
+  document.querySelectorAll("[data-flag]").forEach(input => {
+    input.addEventListener("change", e => {
+      state.flags[e.target.dataset.flag] = e.target.checked;
+      renderGallery();
+      updateStatus();
+      enforceEntryGate();
+    });
+  });
+
+  document.querySelectorAll("[data-preset]").forEach(btn => {
+    btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
+  });
+
+  function applyPreset(name) {
+    const presets = {
+      happy: {},
+      galleryPin: { galleryPin: true },
+      loginUnauth: { loginRequired: true, unauthorized: true },
+      perImage: { imagePassword: true, imagePin: true },
+      // "Worst case" mirrors the worst-case flow diagram:
+      // access password (entry) -> download PIN (gallery-wide) -> image password -> login -> image PIN
+      everything: {
+        galleryAccessPassword: true,
+        galleryPin: true,
+        loginRequired: true,
+        unauthorized: false,
+        imagePassword: true,
+        imagePin: true,
+      },
+      reset: {},
+    };
+    Object.keys(state.flags).forEach(k => state.flags[k] = false);
+    // Reset passed-state too so presets feel fresh
+    state.galleryAccessPassed = false;
+    state.galleryPinPassed = false;
+    state.imagePasswordPassed = false;
+    state.imagePinPassed = false;
+    state.roleSkipped = false;
+    Object.assign(state.flags, presets[name] || {});
+    syncToggleInputs();
+    renderGallery();
+    updateStatus();
+    enforceEntryGate();
+  }
+
+  function syncToggleInputs() {
+    document.querySelectorAll("[data-flag]").forEach(input => {
+      input.checked = !!state.flags[input.dataset.flag];
+    });
+  }
+
+  function updateStatus() {
+    document.getElementById("stateSignedIn").textContent = state.signedIn
+      ? (state.user ? state.user.email : "Yes") : "No";
+    const entryLocked = state.flags.galleryAccessPassword && !state.galleryAccessPassed;
+    document.getElementById("stateEntry").textContent = entryLocked ? "Locked" : "Open";
+    const downloadUnlocked = !state.flags.galleryPin || state.galleryPinPassed;
+    document.getElementById("stateGalleryUnlocked").textContent = downloadUnlocked ? "Yes" : "No";
+    const activeCount = Object.values(state.flags).filter(Boolean).length;
+    document.getElementById("stateGates").textContent = activeCount;
+  }
+
+  // Collapse panel
+  document.getElementById("devHeader").addEventListener("click", e => {
+    if (e.target.id === "toggleCollapse" || e.target.closest(".dev-header")) {
+      const panel = document.getElementById("devPanel");
+      panel.classList.toggle("collapsed");
+      document.getElementById("toggleCollapse").textContent =
+        panel.classList.contains("collapsed") ? "+" : "−";
+    }
+  });
+
+  // Reset button
+  document.getElementById("resetBtn").addEventListener("click", resetAll);
+
+  function resetAll() {
+    state.signedIn = false;
+    state.user = null;
+    state.galleryAccessPassed = false;
+    state.galleryPinPassed = false;
+    state.imagePasswordPassed = false;
+    state.imagePinPassed = false;
+    state.roleSkipped = false;
+    state.skippedImages = [];
+    closeModal();
+    updateStatus();
+    enforceEntryGate();
+    flashStatus("Reset complete");
+  }
+
+  function flashStatus(msg) {
+    const status = document.getElementById("devStatus");
+    const orig = status.style.borderColor;
+    status.style.borderColor = "var(--accent)";
+    setTimeout(() => status.style.borderColor = orig, 600);
+  }
+
+  // ---------- Modal helpers ----------
+  const overlay = document.getElementById("overlay");
+  const modal = document.getElementById("modal");
+
+  function showModal(html) {
+    modal.innerHTML = html;
+    overlay.classList.add("show");
+  }
+  function closeModal() {
+    overlay.classList.remove("show");
+    delete overlay.dataset.modalType;
+  }
+  function shakeModal() {
+    modal.classList.remove("shake");
+    void modal.offsetWidth;
+    modal.classList.add("shake");
+  }
+
+  // Click outside to close — but never dismiss the entry gate that way,
+  // and never dismiss while a download-flow gate is mid-queue.
+  overlay.addEventListener("click", e => {
+    if (e.target !== overlay) return;
+    if (overlay.dataset.modalType === "entry") return; // locked
+    closeModal();
+  });
+
+  // ---------- Download flow state machine ----------
+  document.getElementById("triggerBtn").addEventListener("click", startDownloadFlow);
+  document.getElementById("downloadAllBtn").addEventListener("click", startDownloadFlow);
+  document.getElementById("loginBtn").addEventListener("click", () => {
+    if (state.signedIn) {
+      // act like a "sign out"
+      state.signedIn = false; state.user = null;
+      updateStatus();
+      flashStatus("Signed out");
+    } else {
+      showLoginModal(() => closeModal());
+    }
+  });
+
+  function startDownloadFlow() {
+    // Entry gate must be passed first — guard against this even though
+    // the UI normally won't let the user click while the gallery is locked.
+    if (state.flags.galleryAccessPassword && !state.galleryAccessPassed) {
+      enforceEntryGate();
+      return;
+    }
+
+    // Build the queue of gates in canonical order:
+    //   1. GALLERY-WIDE gates (resolve first — fail fast before asking
+    //      the guest to surrender any image-level credentials)
+    //   2. PER-IMAGE gates
+    const queue = [];
+
+    // ---- gallery-wide ----
+    if (state.flags.galleryPin && !state.galleryPinPassed) queue.push("galleryPin");
+
+    // ---- per-image (login first: identity check before per-asset secrets) ----
+    const pwImages = PHOTOS.filter(p => p.protection === "password");
+    const pinImages = PHOTOS.filter(p => p.protection === "pin");
+    if (state.flags.loginRequired && !state.signedIn && !state.roleSkipped) queue.push("login");
+    if (state.flags.unauthorized && state.flags.loginRequired && !state.roleSkipped) queue.push("unauthorized");
+    if (state.flags.imagePassword && pwImages.length && !state.imagePasswordPassed) queue.push("imagePassword");
+    if (state.flags.imagePin && pinImages.length && !state.imagePinPassed) queue.push("imagePin");
+
+    queue.push("download"); // final step
+    runQueue(queue);
+  }
+
+  function runQueue(queue) {
+    if (!queue.length) return;
+    const next = queue.shift();
+    const proceed = () => runQueue(queue);
+    const abort = () => closeModal();
+    switch (next) {
+      case "galleryPin":     return showGalleryPinModal(proceed, abort);
+      case "login":          return showLoginModal(proceed, abort);
+      case "unauthorized":   return showUnauthorizedModal(proceed, abort);
+      case "imagePassword":  return showImagePasswordModal(proceed, abort);
+      case "imagePin":       return showImagePinModal(proceed, abort);
+      case "download":       return showDownloadProgress();
+    }
+  }
+
+  // ---------- Modal: Gallery PIN ----------
+  function showGalleryPinModal(onNext, onCancel) {
+    showModal(`
+      <div class="modal-body">
+        <div class="modal-icon lock">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
+        <p class="modal-eyebrow">Miguel Mendes Photography</p>
+        <h2 class="modal-title">This gallery is PIN protected.</h2>
+        <p class="modal-text">Enter the 4-digit PIN the photographer shared with you.</p>
+        <div class="pin-row" id="pinRow">
+          <input class="pin-input" maxlength="1" data-i="0" inputmode="numeric" />
+          <input class="pin-input" maxlength="1" data-i="1" inputmode="numeric" />
+          <input class="pin-input" maxlength="1" data-i="2" inputmode="numeric" />
+          <input class="pin-input" maxlength="1" data-i="3" inputmode="numeric" />
+        </div>
+        <p class="field-error" id="pinError">That PIN doesn't match. Try again.</p>
+        <button class="btn-primary" id="submitPin">Unlock gallery</button>
+        <button class="btn-link" id="forgotPin">I don't have a PIN</button>
+      </div>
+      <div class="modal-footer">
+        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+      </div>
+    `);
+    wirePinRow("pinRow", "submitPin");
+    document.getElementById("submitPin").onclick = () => {
+      const pin = collectPin("pinRow");
+      if (pin === CREDS.galleryPin) {
+        state.galleryPinPassed = true;
+        updateStatus();
+        onNext();
+      } else {
+        shakeModal();
+        document.getElementById("pinRow").classList.add("error");
+        document.getElementById("pinError").classList.add("show");
+      }
+    };
+    document.getElementById("forgotPin").onclick = () => {
+      alert("In production: shows a message to contact the photographer.");
+    };
+    setTimeout(() => document.querySelector(".pin-input").focus(), 50);
+  }
+
+  function wirePinRow(rowId, submitId) {
+    const inputs = document.querySelectorAll(`#${rowId} .pin-input`);
+    inputs.forEach((inp, i) => {
+      inp.addEventListener("input", e => {
+        e.target.value = e.target.value.replace(/\D/g, "");
+        if (e.target.value && i < inputs.length - 1) inputs[i + 1].focus();
+        if ([...inputs].every(x => x.value)) document.getElementById(submitId).focus();
+      });
+      inp.addEventListener("keydown", e => {
+        if (e.key === "Backspace" && !inp.value && i > 0) inputs[i - 1].focus();
+        if (e.key === "Enter") document.getElementById(submitId).click();
+      });
+    });
+  }
+  function collectPin(rowId) {
+    return [...document.querySelectorAll(`#${rowId} .pin-input`)].map(i => i.value).join("");
+  }
+
+  // ---------- Entry gate: Gallery access password ----------
+  // This gate fires on page-load (and whenever toggled on) rather than
+  // when "Download all" is clicked. The gallery itself is hidden until
+  // the guest passes it — matches the Zenfolio "Sorry, this gallery is
+  // private" experience.
+  function enforceEntryGate() {
+    const needsGate = state.flags.galleryAccessPassword && !state.galleryAccessPassed;
+    document.body.classList.toggle("gallery-locked", needsGate);
+    // If the gate is no longer needed, close the entry modal if it's open.
+    if (!needsGate && overlay.classList.contains("show") && overlay.dataset.modalType === "entry") {
+      closeModal();
+    }
+    if (needsGate) showGalleryEntryModal();
+  }
+
+  function showGalleryEntryModal() {
+    overlay.dataset.modalType = "entry";
+    modal.innerHTML = `
+      <div class="modal-body">
+        <p class="modal-eyebrow">Miguel Mendes Photography</p>
+        <h2 class="modal-title">Sorry, this gallery is private.</h2>
+        <p class="modal-text">Enter the gallery password to view this gallery.</p>
+        <input type="password" class="field" id="entryPwField" placeholder="Gallery password" />
+        <p class="field-error" id="entryPwError">Incorrect password. Try again.</p>
+        <button class="btn-primary" id="submitEntryPw">Continue</button>
+        <button class="btn-link" id="forgotEntryPw">I don't have the password</button>
+      </div>
+      <div class="modal-footer">
+        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+      </div>
+    `;
+    overlay.classList.add("show");
+    const field = document.getElementById("entryPwField");
+    setTimeout(() => field.focus(), 50);
+    field.addEventListener("keydown", e => {
+      if (e.key === "Enter") document.getElementById("submitEntryPw").click();
+    });
+    document.getElementById("submitEntryPw").onclick = () => {
+      if (field.value === CREDS.galleryAccessPassword) {
+        state.galleryAccessPassed = true;
+        document.body.classList.remove("gallery-locked");
+        closeModal();
+        updateStatus();
+      } else {
+        shakeModal();
+        field.classList.add("error");
+        document.getElementById("entryPwError").classList.add("show");
+      }
+    };
+    document.getElementById("forgotEntryPw").onclick = () => {
+      alert("In production: shows a message to contact the photographer.");
+    };
+  }
+
+  // ---------- Modal: Login (per-image role gate) ----------
+  function showLoginModal(onNext, onCancel) {
+    const roleImages = PHOTOS.filter(p => p.protection === "role");
+    showModal(`
+      <div class="modal-body">
+        <div class="modal-icon role">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2"/></svg>
+        </div>
+        <p class="modal-eyebrow">Protected Images</p>
+        <h2 class="modal-title">${roleImages.length} of ${PHOTOS.length} photos need an authorized account.</h2>
+        <p class="modal-text">Sign in to include them, or skip to download just the public photos.</p>
+        <input type="email" class="field" id="loginEmail" placeholder="Email address" value="${state.user ? state.user.email : ''}" />
+        <input type="password" class="field" id="loginPw" placeholder="Password" />
+        <button class="btn-primary" id="submitLogin">Sign in &amp; include</button>
+        <button class="btn-secondary" id="skipLogin">Skip ${roleImages.length === 1 ? "this photo" : `these ${roleImages.length} photos`}</button>
+        <button class="btn-link" id="forgotLogin">Forgot password?</button>
+      </div>
+      <div class="modal-footer">
+        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+      </div>
+    `);
+    document.getElementById("loginEmail").focus();
+    document.getElementById("submitLogin").onclick = () => {
+      const email = document.getElementById("loginEmail").value.trim();
+      const pw = document.getElementById("loginPw").value.trim();
+      if (!email || !pw) {
+        shakeModal();
+        return;
+      }
+      state.signedIn = true;
+      state.user = { email, name: email.split("@")[0] };
+      updateStatus();
+      onNext();
+    };
+    document.getElementById("skipLogin").onclick = () => {
+      // Guest declines to sign in -> role-protected photos are skipped
+      // and the upcoming unauthorized modal is bypassed.
+      state.roleSkipped = true;
+      roleImages.forEach(p => {
+        if (!state.skippedImages.some(s => s.id === p.id)) {
+          state.skippedImages.push({ ...p, reason: "role" });
+        }
+      });
+      onNext();
+    };
+    document.getElementById("forgotLogin").onclick = () => {
+      alert("In production: opens the password reset flow.");
+    };
+  }
+
+  // ---------- Modal: Unauthorized role ----------
+  function showUnauthorizedModal(onNext, onCancel) {
+    const initials = state.user ? state.user.email.slice(0, 2).toUpperCase() : "??";
+    const roleImages = PHOTOS.filter(p => p.protection === "role");
+    showModal(`
+      <div class="modal-body">
+        <div class="modal-icon lock">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+        </div>
+        <p class="modal-eyebrow">Protected Images</p>
+        <h2 class="modal-title">Your account isn't authorized for ${roleImages.length === 1 ? "1 of these photos" : `${roleImages.length} of these photos`}.</h2>
+        <p class="modal-text">You're signed in, but ${roleImages.length === 1 ? "this photo is" : "these photos are"} limited to specific guests.</p>
+        <div class="you-account">
+          <div class="avatar">${initials}</div>
+          <div class="info">
+            <div class="name">Signed in as</div>
+            <div class="email">${state.user ? state.user.email : ''}</div>
+          </div>
+        </div>
+        <button class="btn-primary" id="switchAccount">Sign in with a different account</button>
+        <button class="btn-secondary" id="skipUnauth">Skip ${roleImages.length === 1 ? "this photo" : `these ${roleImages.length} photos`}</button>
+        <button class="btn-link" id="contactOwner">Request access from photographer</button>
+      </div>
+      <div class="modal-footer">
+        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+      </div>
+    `);
+    document.getElementById("switchAccount").onclick = () => {
+      state.signedIn = false; state.user = null;
+      updateStatus();
+      showLoginModal(() => {
+        // After re-login, if "unauthorized" flag is still on, show this modal again.
+        if (state.flags.unauthorized && !state.roleSkipped) showUnauthorizedModal(onNext, onCancel);
+        else onNext();
+      }, onCancel);
+    };
+    document.getElementById("skipUnauth").onclick = () => {
+      state.roleSkipped = true;
+      roleImages.forEach(p => {
+        if (!state.skippedImages.some(s => s.id === p.id)) {
+          state.skippedImages.push({ ...p, reason: "role" });
+        }
+      });
+      onNext();
+    };
+    document.getElementById("contactOwner").onclick = () => {
+      alert("In production: opens a 'Request access' form sent to the photographer.");
+      closeModal();
+    };
+  }
+
+  // ---------- Modal: Image password ----------
+  function showImagePasswordModal(onNext, onCancel) {
+    const pwImages = PHOTOS.filter(p => p.protection === "password");
+    showModal(`
+      <div class="modal-body">
+        <div class="modal-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
+        <p class="modal-eyebrow">Protected Images</p>
+        <h2 class="modal-title">${pwImages.length} of ${PHOTOS.length} photos need a password.</h2>
+        <p class="modal-text">Enter the image password the photographer shared, or skip to download just the unprotected photos.</p>
+        <input type="password" class="field" id="imgPwField" placeholder="Image password" />
+        <p class="field-error" id="imgPwError">Incorrect password. Try again or skip.</p>
+        <button class="btn-primary" id="submitImgPw">Unlock & include</button>
+        <button class="btn-secondary" id="skipImgPw">Skip these ${pwImages.length} photo${pwImages.length===1?"":"s"}</button>
+      </div>
+      <div class="modal-footer">
+        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+      </div>
+    `);
+    const field = document.getElementById("imgPwField");
+    field.focus();
+    field.addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("submitImgPw").click(); });
+    document.getElementById("submitImgPw").onclick = () => {
+      if (field.value === CREDS.imagePassword) {
+        state.imagePasswordPassed = true;
+        updateStatus();
+        onNext();
+      } else {
+        shakeModal();
+        field.classList.add("error");
+        document.getElementById("imgPwError").classList.add("show");
+      }
+    };
+    document.getElementById("skipImgPw").onclick = () => {
+      state.skippedImages.push(...pwImages.map(p => ({...p, reason: "password"})));
+      onNext();
+    };
+  }
+
+  // ---------- Modal: Image PIN ----------
+  function showImagePinModal(onNext, onCancel) {
+    const pinImages = PHOTOS.filter(p => p.protection === "pin");
+    showModal(`
+      <div class="modal-body">
+        <div class="modal-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="16" r="1"/></svg>
+        </div>
+        <p class="modal-eyebrow">Protected Images</p>
+        <h2 class="modal-title">${pinImages.length} of ${PHOTOS.length} photos need a PIN.</h2>
+        <p class="modal-text">Enter the image PIN the photographer shared, or skip to download just the unprotected photos.</p>
+        <div class="pin-row" id="imgPinRow">
+          <input class="pin-input" maxlength="1" data-i="0" inputmode="numeric" />
+          <input class="pin-input" maxlength="1" data-i="1" inputmode="numeric" />
+          <input class="pin-input" maxlength="1" data-i="2" inputmode="numeric" />
+          <input class="pin-input" maxlength="1" data-i="3" inputmode="numeric" />
+        </div>
+        <p class="field-error" id="imgPinError">That PIN doesn't match. Try again or skip.</p>
+        <button class="btn-primary" id="submitImgPin">Unlock & include</button>
+        <button class="btn-secondary" id="skipImgPin">Skip ${pinImages.length===1?"this photo":"these photos"}</button>
+      </div>
+      <div class="modal-footer">
+        <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
+      </div>
+    `);
+    wirePinRow("imgPinRow", "submitImgPin");
+    document.getElementById("submitImgPin").onclick = () => {
+      const pin = collectPin("imgPinRow");
+      if (pin === CREDS.imagePin) {
+        state.imagePinPassed = true;
+        updateStatus();
+        onNext();
+      } else {
+        shakeModal();
+        document.getElementById("imgPinRow").classList.add("error");
+        document.getElementById("imgPinError").classList.add("show");
+      }
+    };
+    document.getElementById("skipImgPin").onclick = () => {
+      state.skippedImages.push(...pinImages.map(p => ({...p, reason: "pin"})));
+      onNext();
+    };
+    setTimeout(() => document.querySelector("#imgPinRow .pin-input").focus(), 50);
+  }
+
+  // ---------- Modal: Download progress + success ----------
+  function showDownloadProgress() {
+    // figure out how many photos will be included
+    let included = PHOTOS.length;
+    // Implicit per-image skips when toggles are ON but user didn't pass the gate:
+    if (state.flags.imagePassword && !state.imagePasswordPassed) {
+      const pwImgs = PHOTOS.filter(p => p.protection === "password");
+      pwImgs.forEach(p => {
+        if (!state.skippedImages.some(s => s.id === p.id)) {
+          state.skippedImages.push({...p, reason: "password"});
+        }
+      });
+    }
+    if (state.flags.imagePin && !state.imagePinPassed) {
+      const pinImgs = PHOTOS.filter(p => p.protection === "pin");
+      pinImgs.forEach(p => {
+        if (!state.skippedImages.some(s => s.id === p.id)) {
+          state.skippedImages.push({...p, reason: "pin"});
+        }
+      });
+    }
+    // role-locked images get auto-skipped if user is unauthorized
+    if (state.flags.unauthorized) {
+      const roleImgs = PHOTOS.filter(p => p.protection === "role");
+      roleImgs.forEach(p => {
+        if (!state.skippedImages.some(s => s.id === p.id)) {
+          state.skippedImages.push({...p, reason: "role"});
+        }
+      });
+    }
+    included = PHOTOS.length - state.skippedImages.length;
+
+    showModal(`
+      <div class="modal-body">
+        <p class="modal-eyebrow">Preparing your download</p>
+        <h2 class="modal-title">Zipping ${included} photo${included===1?"":"s"}…</h2>
+        <p class="progress-detail" id="progressDetail">0%</p>
+        <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+        <p class="modal-text" style="margin-top:0">We'll start the download automatically when it's ready.</p>
+      </div>
+    `);
+
+    const bar = document.getElementById("progressBar");
+    const detail = document.getElementById("progressDetail");
+    let pct = 0;
+    const tick = setInterval(() => {
+      pct += Math.random() * 12 + 5;
+      if (pct >= 100) {
+        pct = 100;
+        clearInterval(tick);
+        bar.style.width = "100%";
+        detail.textContent = "100%";
+        setTimeout(showDownloadComplete, 350);
+      } else {
+        bar.style.width = pct + "%";
+        detail.textContent = Math.round(pct) + "%";
+      }
+    }, 280);
+  }
+
+  function showDownloadComplete() {
+    const included = PHOTOS.length - state.skippedImages.length;
+    const skippedHtml = state.skippedImages.length
+      ? `<div class="progress-skipped">
+          ${state.skippedImages.length} of ${PHOTOS.length} photos were not included.
+         </div>`
+      : "";
+    showModal(`
+      <div class="modal-body">
+        <div class="modal-icon success">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <p class="modal-eyebrow">Download Ready</p>
+        <h2 class="modal-title">Your ${included} photo${included===1?"":"s"} ${included===1?"is":"are"} downloading.</h2>
+        <p class="modal-text">Check your browser's downloads folder for <b>HelloWorldGallery.zip</b>.</p>
+        ${skippedHtml}
+        <button class="btn-primary" id="doneBtn">Done</button>
+      </div>
+    `);
+    document.getElementById("doneBtn").onclick = () => {
+      closeModal();
+      // Reset per-flow state so they can re-test cleanly
+      state.skippedImages = [];
+    };
+  }
+
+  // ---------- Init ----------
+  renderGallery();
+  updateStatus();
+  enforceEntryGate();
+</script>
+</body>
+</html>
