@@ -344,6 +344,51 @@
   .switch input:checked + .slider { background: var(--accent); }
   .switch input:checked + .slider::before { transform: translateX(14px); }
 
+  /* User state 3-way switcher */
+  .user-state-switcher {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .user-state-btn {
+    background: #2a2a30;
+    border: 1px solid #3a3a44;
+    color: #d5d5dc;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .user-state-btn:hover { background: #33333a; border-color: #4a4a55; }
+  .user-state-btn::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .user-state-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    font-weight: 600;
+  }
+  .user-state-btn.active::before {
+    background: white;
+    border-color: white;
+    box-shadow: inset 0 0 0 2.5px var(--accent);
+  }
+
   .dev-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
   .preset-btn {
     flex: 1 1 calc(50% - 6px);
@@ -867,6 +912,15 @@
       </div>
     </div>
 
+    <div class="dev-section-group">
+      <p class="dev-section-title">User state</p>
+      <div class="user-state-switcher" id="userStateSwitcher">
+        <button class="user-state-btn active" data-state="not-logged-in">Not logged in</button>
+        <button class="user-state-btn" data-state="logged-not-authorized">Logged in, not authorized</button>
+        <button class="user-state-btn" data-state="logged-authorized">Logged in, authorized</button>
+      </div>
+    </div>
+
     <p class="dev-section-title">Quick Presets</p>
     <div class="dev-presets">
       <button class="preset-btn" data-preset="happy">Happy path</button>
@@ -1019,7 +1073,55 @@
       updateStatus();
       updateRestrictedChip();
       enforceEntryGate();
+      // The "Account not authorized" toggle also affects the user-state UI
+      // when the guest is already signed in.
+      if (e.target.dataset.flag === "unauthorized") syncUserStateUI();
     });
+  });
+
+  // ---------- User state 3-way switcher ----------
+  // Sets the demo user's initial auth state. The "Account not authorized"
+  // toggle ALSO acts as the "what sub-flow sign-in will result in" predicate:
+  // when the guest clicks Try to sign in inside the modal and submits, the
+  // resulting state.flags.unauthorized stays as the toggle says, so the demo
+  // can simulate "I tried to sign in but my account still isn't allowed".
+  function applyUserState(stateValue) {
+    switch (stateValue) {
+      case "not-logged-in":
+        state.signedIn = false;
+        state.user = null;
+        break;
+      case "logged-not-authorized":
+        state.signedIn = true;
+        state.user = state.user || { email: "demo@example.com", name: "demo" };
+        state.flags.unauthorized = true;
+        document.querySelector('[data-flag="unauthorized"]').checked = true;
+        break;
+      case "logged-authorized":
+        state.signedIn = true;
+        state.user = state.user || { email: "demo@example.com", name: "demo" };
+        state.flags.unauthorized = false;
+        document.querySelector('[data-flag="unauthorized"]').checked = false;
+        break;
+    }
+    syncUserStateUI();
+    renderGallery();
+    updateStatus();
+    updateRestrictedChip();
+  }
+
+  function syncUserStateUI() {
+    let active;
+    if (!state.signedIn) active = "not-logged-in";
+    else if (state.flags.unauthorized) active = "logged-not-authorized";
+    else active = "logged-authorized";
+    document.querySelectorAll(".user-state-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.state === active);
+    });
+  }
+
+  document.querySelectorAll(".user-state-btn").forEach(btn => {
+    btn.addEventListener("click", () => applyUserState(btn.dataset.state));
   });
 
   document.querySelectorAll("[data-preset]").forEach(btn => {
@@ -1058,6 +1160,7 @@
     renderGallery();
     updateStatus();
     updateRestrictedChip();
+    syncUserStateUI();
     enforceEntryGate();
   }
 
@@ -1103,6 +1206,7 @@
     renderGallery();
     updateStatus();
     updateRestrictedChip();
+    syncUserStateUI();
     enforceEntryGate();
     flashStatus("Reset complete");
   }
@@ -1150,6 +1254,7 @@
       updateStatus();
       renderGallery();
       updateRestrictedChip();
+      syncUserStateUI();
       flashStatus("Signed out");
     } else {
       showSignInForm(() => closeModal());
@@ -1327,10 +1432,13 @@
   }
 
   // ---------- Modal: View access via sign-in (Gate 2a — runs first) ----------
-  // Identity-first: if the guest is already signed in with the right role,
-  // this step auto-passes silently (the role photos get added to viewUnlocked
-  // and the flow advances). Otherwise the guest sees an inline sign-in form
-  // with a Skip secondary.
+  // Choice modal: primary = Download what's available, secondary = sign in
+  // (varies by auth state). Sub-flow handles the actual credential form.
+  //
+  // Behaviour by user state:
+  //   - Logged in, authorized  -> auto-skip silently (role photos unlock)
+  //   - Logged in, unauthorized -> no secondary CTA, subtext explains
+  //   - Not logged in           -> secondary CTA "Try to sign in with your account"
   function showViewSignInModal(onNext, onCancel) {
     const roleImages = PHOTOS.filter(p =>
       p.protection === "role"
@@ -1341,7 +1449,7 @@
 
     if (roleImages.length === 0) { onNext(); return; }
 
-    // Auto-pass: already signed in AND authorized -> unlock silently
+    // Auto-pass: already signed in AND authorized
     if (state.signedIn && !state.flags.unauthorized) {
       roleImages.forEach(p => state.viewUnlocked.add(p.id));
       renderGallery();
@@ -1352,64 +1460,38 @@
     }
 
     const isOne = roleImages.length === 1;
-    const title = state.signedIn
-      ? `Your account isn't authorized for ${isOne ? "1 of these photos" : `${roleImages.length} of these photos`}.`
-      : `${roleImages.length} of ${PHOTOS.length} ${isOne ? "photo needs" : "photos need"} an authorized account to view.`;
-    const text = state.signedIn
-      ? `Sign in with a different account to include ${isOne ? "it" : "them"}, or skip to download without ${isOne ? "it" : "them"}.`
-      : `Sign in with your account to include ${isOne ? "it" : "them"}, or skip to download without ${isOne ? "it" : "them"}.`;
+    const downloadable = PHOTOS.length - roleImages.length;
+    const downloadLabel = downloadable === 1 ? "Download 1 photo" : `Download ${downloadable} photos`;
+    const isLoggedIn = state.signedIn;
+
+    // Subtext: depends on whether the guest is signed in
+    const subtext = isLoggedIn
+      ? `${roleImages.length} ${isOne ? "image is" : "images are"} not allowed with your current login credentials.`
+      : `${roleImages.length} ${isOne ? "photo is" : "photos are"} limited to specific roles.`;
+
+    // Secondary CTA: only when NOT signed in
+    const secondaryHtml = !isLoggedIn
+      ? `<button class="btn-secondary" id="trySignIn">Try to sign in with your account</button>`
+      : "";
 
     showModal(`
       <div class="modal-body">
-        <div class="modal-icon role">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2"/></svg>
+        <div class="modal-icon success">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
         </div>
-        <p class="modal-eyebrow">Restricted Images</p>
-        <h2 class="modal-title">${title}</h2>
-        <p class="modal-text">${text}</p>
-        <span class="show-files" data-target="signInFilesList">Show files</span>
-        <div class="files-list" id="signInFilesList">${roleImages.map(p => p.title).join(", ")}</div>
-        <input type="email" class="field" id="viewLoginEmail" placeholder="Email address" value="${state.user ? state.user.email : ''}" />
-        <input type="password" class="field" id="viewLoginPw" placeholder="Password" />
-        <button class="btn-primary" id="submitViewSignIn">Sign in &amp; include</button>
-        <button class="btn-secondary" id="skipViewSignIn">Skip ${isOne ? "this photo" : `these ${roleImages.length} photos`}</button>
-        <button class="btn-link" id="forgotViewLogin">Forgot password?</button>
+        <p class="modal-eyebrow">Protected Images</p>
+        <h2 class="modal-title">You're about to download ${downloadable} of ${PHOTOS.length} photos.</h2>
+        <p class="modal-text">${subtext}</p>
+        <button class="btn-primary" id="downloadAvailable">${downloadLabel}</button>
+        ${secondaryHtml}
+        <button class="btn-link" id="requestAccess">Request access from photographer</button>
       </div>
       <div class="modal-footer">
         <a href="#" onclick="return false">Terms of Service</a> · <a href="#" onclick="return false">Privacy Policy</a>
       </div>
     `);
 
-    // Show-files toggle
-    document.querySelectorAll(".show-files").forEach(toggle => {
-      toggle.onclick = () => {
-        toggle.classList.toggle("open");
-        const target = document.getElementById(toggle.dataset.target);
-        target.classList.toggle("open");
-        toggle.textContent = toggle.classList.contains("open") ? "Hide files" : "Show files";
-      };
-    });
-
-    document.getElementById("submitViewSignIn").onclick = () => {
-      const email = document.getElementById("viewLoginEmail").value.trim();
-      const pw = document.getElementById("viewLoginPw").value.trim();
-      if (!email || !pw) { shakeModal(); return; }
-      state.signedIn = true;
-      state.user = { email, name: email.split("@")[0] };
-      updateStatus();
-      if (state.flags.unauthorized) {
-        // The newly-signed-in account is still unauthorized — re-render
-        // this modal so the guest can try yet another account or skip.
-        showViewSignInModal(onNext, onCancel);
-      } else {
-        roleImages.forEach(p => state.viewUnlocked.add(p.id));
-        renderGallery();
-        updateRestrictedChip();
-        onNext();
-      }
-    };
-
-    document.getElementById("skipViewSignIn").onclick = () => {
+    document.getElementById("downloadAvailable").onclick = () => {
       roleImages.forEach(p => {
         if (!state.skippedImages.some(s => s.id === p.id)) {
           state.skippedImages.push({ ...p, reason: "role" });
@@ -1418,11 +1500,37 @@
       onNext();
     };
 
-    document.getElementById("forgotViewLogin").onclick = () => {
-      alert("In production: opens the password reset flow.");
-    };
+    const trySignInBtn = document.getElementById("trySignIn");
+    if (trySignInBtn) {
+      trySignInBtn.onclick = () => {
+        showSignInForm(() => {
+          if (!state.signedIn) {
+            // Guest cancelled the sub-flow — re-show choice modal
+            showViewSignInModal(onNext, onCancel);
+            return;
+          }
+          // Just signed in. The "Account not authorized" toggle decides
+          // whether the new account qualifies.
+          if (state.flags.unauthorized) {
+            // Sub-flow sign-in didn't grant authorization — re-show modal
+            // (now without a secondary CTA, since user is signed in)
+            showViewSignInModal(onNext, onCancel);
+          } else {
+            // Sub-flow sign-in succeeded with the right role
+            roleImages.forEach(p => state.viewUnlocked.add(p.id));
+            renderGallery();
+            updateRestrictedChip();
+            updateStatus();
+            onNext();
+          }
+        });
+      };
+    }
 
-    setTimeout(() => document.getElementById("viewLoginEmail").focus(), 50);
+    document.getElementById("requestAccess").onclick = () => {
+      alert("In production: opens a 'Request access' form sent to the photographer.");
+      closeModal();
+    };
   }
 
   // ---------- Modal: View access via image password (Gate 2b — runs second) ----------
@@ -1525,6 +1633,10 @@
       if (!email || !pw) { shakeModal(); return; }
       state.signedIn = true;
       state.user = { email, name: email.split("@")[0] };
+      // We DO NOT touch state.flags.unauthorized — the "Account not authorized"
+      // toggle pre-configures whether the new account qualifies. The
+      // user-state switcher syncs to reflect the result.
+      syncUserStateUI();
       updateStatus();
       renderGallery();
       updateRestrictedChip();
@@ -1668,6 +1780,7 @@
   renderGallery();
   updateStatus();
   updateRestrictedChip();
+  syncUserStateUI();
   enforceEntryGate();
 </script>
 </body>
