@@ -153,6 +153,8 @@
     .compare-all-btn:hover { background: var(--brand-cream) !important; }
     /* Compare-roles modal — uses the same scrollbar styling as the matrix when the grid
        grows wider than the modal viewport (many roles). */
+    .compare-feature-header-expandable:hover { background: #f5f5f5 !important; }
+    .compare-feature-header-expandable:hover .compare-feature-header-sticky { background: #f5f5f5 !important; }
     .compare-grid-scroll { overflow-x: auto; overflow-y: visible; }
     .compare-grid-scroll::-webkit-scrollbar { height: 8px; }
     .compare-grid-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -343,6 +345,11 @@
       border-radius: var(--r-xl) !important;
       box-shadow: var(--shadow-xl);
     }
+    /* Fullscreen takeover (Compare All) overrides the modal-card rounding/shadow */
+    .modal-card.compare-all-fullscreen {
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
     /* Underline tab — already keyed off .tab-btn.is-active, but harmonize the underline weight */
     .tab-btn.is-active::after { background: var(--orange) !important; height: 2px !important; bottom: -1px !important; }
 
@@ -529,7 +536,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useMemo, useEffect } = React;
+    const { useState, useMemo, useEffect, useRef } = React;
 
     // ===== Responsive helper =====
     function useIsMobile() {
@@ -746,7 +753,7 @@
           { id: 'individual-resolution', type: 'select', label: 'Individual Allowed Resolution',
             options: ['Original','High','Medium','Low'], def: 'Original',
             dependsOn: { settingId: 'download-type', values: ['Full Gallery & Individual Download', 'Individual Download Only'] } },
-          { id: 'license', type: 'toggle', optional: true,
+          { id: 'license', type: 'toggle', optional: true, sharedCard: true,
             label: 'Digital photo license agreement (OPTIONAL)',
             meta: 'Apply a license to all digital photos downloaded from this gallery.\nManage license in Selling Settings.',
             def: false },
@@ -777,6 +784,42 @@
       { id: 'favorites', name: 'Favorites', settings: [] },
       { id: 'commenting', name: 'Commenting', settings: [] },
       { id: 'sharing', name: 'Sharing', settings: [] },
+      // Screenshot Protection — per-role feature with Desktop and Mobile deterrence sub-settings.
+      // Enabling a role auto-enables both desktop + mobile; disabling both sub-toggles auto-disables the role.
+      { id: 'screenshot-protection', name: 'Screenshot Protection',
+        settings: [
+          { id: 'screenshot-config', type: 'screenshot-config', fullWidth: true,
+            def: {
+              desktop: true,
+              desktopTitle: 'Do Not Screenshot.',
+              desktopMessage: 'Unauthorized reproduction, distribution, or copying of these images by any means, including screenshots, is strictly prohibited and may constitute copyright infringement under the Copyright Act. Violators may be subject to legal action and monetary damages.',
+              mobile: true,
+              mobileScope: 'full',
+              mobileBlurType: 'diagonal',
+              mobileBanner: false,
+            },
+          },
+        ],
+      },
+      // Watermark — applies to all roles. No per-role toggle; the watermark source
+      // and its position are gallery-wide settings.
+      { id: 'watermark', name: 'Watermark', appliesToAll: true,
+        settings: [
+          { id: 'watermark-source', type: 'select', optional: true,
+            meta: (<>Add a watermark to your gallery photos and choose its position. Update or add new watermarks in <a href="#" style={{ color: 'var(--brand)', fontWeight: 600, textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>Account Settings.</a></>),
+            options: ['None', 'My Watermark'], def: 'None' },
+          { id: 'watermark-position', type: 'position', optional: true, fullWidth: true,
+            def: 'mc',
+            dependsOn: { settingId: 'watermark-source', values: ['My Watermark'] } },
+        ],
+      },
+      // Video Previews — gallery-wide feature with a single shared toggle.
+      { id: 'video-previews', name: 'Video Previews', appliesToAll: true, sharedToggle: true,
+        settings: [
+          { id: 'preview-config', type: 'video-preview-config', optional: true, fullWidth: true,
+            def: { start: '00', duration: '15' } },
+        ],
+      },
     ];
 
     const PRESETS = {
@@ -811,7 +854,9 @@
       const preset = PRESETS[presetId];
       const state = {};
       FEATURE_DEFS.forEach(f => {
-        const enabled = preset.enabled === 'all' ? true : preset.enabled.includes(f.id);
+        // sharedToggle features default off (user explicitly enables them).
+        // Other appliesToAll features (e.g. Watermark) are always-enabled.
+        const enabled = f.sharedToggle ? false : (f.appliesToAll ? true : (preset.enabled === 'all' ? true : preset.enabled.includes(f.id)));
         const values = {};
         f.settings.forEach(s => { values[s.id] = Array.isArray(s.def) ? [...s.def] : s.def; });
         state[f.id] = { enabled, values };
@@ -820,12 +865,14 @@
     };
 
     const buildEveryoneState = () => {
-      // Default state: every feature is OFF for the Everyone role.
+      // Default state: every feature is OFF for the Everyone role,
+      // except appliesToAll features (e.g. Watermark) which have no per-role toggle
+      // and should always be enabled so their controls are interactive.
       const state = {};
       FEATURE_DEFS.forEach(f => {
         const values = {};
         f.settings.forEach(s => { values[s.id] = Array.isArray(s.def) ? [...s.def] : s.def; });
-        state[f.id] = { enabled: false, values };
+        state[f.id] = { enabled: f.sharedToggle ? false : (f.appliesToAll ? true : false), values };
       });
       return state;
     };
@@ -864,13 +911,14 @@
     // Each feature defines an "on with summary" prefix, an "on without summary" fallback,
     // and a negative phrase used when the feature is off for the role group.
     const FEATURE_VERBS = {
-      'photo-downloads': { onWith: 'can download', onBare: 'can download photos', off: 'cannot download photos' },
-      'video-downloads': { onWith: 'can download videos:', onBare: 'can download videos', off: 'cannot download videos' },
-      'keyword-search':  { onWith: 'can search by keyword', onBare: 'can search by keyword', off: 'cannot search by keyword' },
-      'favorites':       { onWith: 'can mark favorites', onBare: 'can mark favorites', off: 'cannot use favorites' },
-      'commenting':      { onWith: 'can comment',       onBare: 'can comment',         off: 'cannot comment' },
-      'sharing':         { onWith: 'can share',         onBare: 'can share',           off: 'cannot share' },
-      'face-finder':     { onWith: 'can use Face Finder', onBare: 'can use Face Finder', off: 'cannot use Face Finder' },
+      'photo-downloads':       { onWith: 'can download', onBare: 'can download photos', off: 'cannot download photos' },
+      'video-downloads':       { onWith: 'can download videos:', onBare: 'can download videos', off: 'cannot download videos' },
+      'keyword-search':        { onWith: 'can search by keyword', onBare: 'can search by keyword', off: 'cannot search by keyword' },
+      'favorites':             { onWith: 'can mark favorites', onBare: 'can mark favorites', off: 'cannot use favorites' },
+      'commenting':            { onWith: 'can comment',       onBare: 'can comment',         off: 'cannot comment' },
+      'sharing':               { onWith: 'can share',         onBare: 'can share',           off: 'cannot share' },
+      'face-finder':           { onWith: 'can use Face Finder', onBare: 'can use Face Finder', off: 'cannot use Face Finder' },
+      'screenshot-protection': { onWith: 'has screenshot protection', onBare: 'has screenshot protection', off: '' },
     };
     const joinNames = (names) => {
       if (names.length === 0) return '';
@@ -1208,6 +1256,24 @@
 
     const InnerSidebar = ({ features, roles, perRole, activeSection, onSelectSection, contacts = [], accessMode }) => {
       const featureStatus = (fId) => {
+        const feature = features.find(f => f.id === fId);
+        if (feature?.sharedToggle) {
+          // Shared-toggle features: status comes directly from the enabled flag.
+          const refRoleId = roles[0]?.id;
+          return { state: !!perRole[refRoleId]?.[fId]?.enabled ? 'all' : 'none' };
+        }
+        if (feature?.appliesToAll) {
+          // Gallery-wide features have no per-role toggle; derive on/off from whether
+          // any shared setting differs from its default (e.g. watermark-source !== 'None').
+          const refRoleId = roles[0]?.id;
+          const values = perRole[refRoleId]?.[fId]?.values || {};
+          const isActive = feature.settings.some(s => {
+            const val = values[s.id];
+            const def = Array.isArray(s.def) ? s.def[0] : s.def;
+            return val !== undefined && val !== def;
+          });
+          return { state: isActive ? 'all' : 'none' };
+        }
         const onCount = roles.filter(r => perRole[r.id]?.[fId]?.enabled).length;
         if (onCount === 0) return { state: 'none' };
         if (onCount === roles.length) return { state: 'all' };
@@ -1357,7 +1423,7 @@
       };
 
       return (
-        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4"
+        <div className="modal-backdrop fixed inset-0 z-[60] flex items-center justify-center px-4"
           style={{ background: 'rgba(27, 28, 31, 0.45)' }} onClick={onClose}>
           <div className="modal-card bg-white rounded-2xl border shadow-xl w-full max-w-[680px] p-6"
             style={{ borderColor: 'var(--card-border)' }} onClick={e => e.stopPropagation()}>
@@ -1445,7 +1511,7 @@
       const canAdd = email.trim().length > 0;
       const upper = role.name.toUpperCase();
       return (
-        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4"
+        <div className="modal-backdrop fixed inset-0 z-[60] flex items-center justify-center px-4"
           style={{ background: 'rgba(27, 28, 31, 0.45)' }} onClick={onClose}>
           <div className="modal-card bg-white rounded-2xl border shadow-xl w-full max-w-[600px] p-6"
             style={{ borderColor: 'var(--card-border)' }} onClick={e => e.stopPropagation()}>
@@ -1588,15 +1654,35 @@
     // ===== Column Header =====
     const ColumnHeader = ({ role, contactCount = 0, isMenuOpen, onMenuToggle, isRenaming, onCommitRename, onCancelRename, onRename, onDuplicate, onRemove, onSaveLater, onAddContact }) => {
       const [tempName, setTempName] = useState(role.name);
+      const inputRef = useRef(null);
       useEffect(() => { if (isRenaming) setTempName(role.name); }, [isRenaming, role.name]);
+      // Defer focus to the next tick so it lands after React's commit + any focus the
+      // browser sends when the kebab/menu unmount around the input. Plain `autoFocus` is
+      // unreliable in the Compare All fullscreen (sticky + overflow:auto container drops it).
+      useEffect(() => {
+        if (!isRenaming) return;
+        const t = setTimeout(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select?.();
+        }, 0);
+        return () => clearTimeout(t);
+      }, [isRenaming]);
 
       return (
         <div className="relative flex items-center justify-center gap-1" style={{ color: 'var(--text-secondary)' }}>
           {isRenaming ? (
-            <input autoFocus value={tempName}
+            <input ref={inputRef} value={tempName}
               onChange={(e) => setTempName(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              onBlur={() => onCommitRename(tempName)}
+              onBlur={() => {
+                // Only commit if the user actually changed the name. If blur fires while the
+                // name is still the original (e.g. the focus race inside the Compare All
+                // fullscreen, or the user just clicked the field and clicked away) keep the
+                // editor open instead of snapping back — user can press Escape to cancel or
+                // type + Enter to commit.
+                if (tempName.trim() === role.name) return;
+                onCommitRename(tempName);
+              }}
               onKeyDown={(e) => {
                 e.stopPropagation();
                 if (e.key === 'Enter') { e.preventDefault(); onCommitRename(tempName); }
@@ -1629,6 +1715,120 @@
               onRemove={onRemove}
             />
           )}
+        </div>
+      );
+    };
+
+    // ===== Watermark position picker =====
+    // 3x3 grid + sample image preview. Drives where the watermark text sits on the photo.
+    // Positions are encoded as "tl|tc|tr|ml|mc|mr|bl|bc|br" (top/middle/bottom + left/center/right).
+    const WATERMARK_POSITIONS = [
+      ['tl','tc','tr'],
+      ['ml','mc','mr'],
+      ['bl','bc','br'],
+    ];
+    const watermarkPositionStyle = (pos) => {
+      const map = {
+        tl: { top: 12, left: 16, textAlign: 'left' },
+        tc: { top: 12, left: '50%', transform: 'translateX(-50%)', textAlign: 'center' },
+        tr: { top: 12, right: 16, textAlign: 'right' },
+        ml: { top: '50%', left: 16, transform: 'translateY(-50%)', textAlign: 'left' },
+        mc: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' },
+        mr: { top: '50%', right: 16, transform: 'translateY(-50%)', textAlign: 'right' },
+        bl: { bottom: 12, left: 16, textAlign: 'left' },
+        bc: { bottom: 12, left: '50%', transform: 'translateX(-50%)', textAlign: 'center' },
+        br: { bottom: 12, right: 16, textAlign: 'right' },
+      };
+      return map[pos] || map.mc;
+    };
+    const WatermarkPositionPicker = ({ value, onChange, disabled }) => {
+      return (
+        <div className="watermark-picker w-full flex flex-col items-center"
+          style={{ pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.6 : 1 }}>
+          <div className="text-[12px] font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+            Edit Position
+          </div>
+          <div className="watermark-grid" role="radiogroup" aria-label="Watermark position"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 30px)', gridTemplateRows: 'repeat(3, 30px)', gap: 2, marginBottom: 16 }}>
+            {WATERMARK_POSITIONS.flat().map(pos => {
+              const selected = value === pos;
+              return (
+                <button key={pos} type="button" role="radio" aria-checked={selected}
+                  onClick={() => onChange(pos)}
+                  className="watermark-cell"
+                  style={{
+                    width: 30, height: 30,
+                    background: selected ? 'var(--brand)' : '#fff',
+                    border: '1px solid ' + (selected ? 'var(--brand)' : 'var(--card-border)'),
+                    cursor: 'pointer',
+                    transition: 'background 0.12s, border-color 0.12s',
+                    padding: 0,
+                  }}
+                  title={`Position: ${pos}`}
+                />
+              );
+            })}
+          </div>
+          <div className="watermark-preview" style={{
+            width: '100%', maxWidth: 480,
+            position: 'relative',
+            aspectRatio: '16 / 10',
+            borderRadius: 8,
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg, #3a2f24 0%, #5c4a37 35%, #7e6a52 60%, #6a563f 100%)',
+            boxShadow: 'inset 0 0 80px rgba(0,0,0,0.25)',
+          }}>
+            {/* Stylised photo: textured sand + a pale surfboard shape */}
+            <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+              <defs>
+                <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6b563f"/>
+                  <stop offset="100%" stopColor="#3a2f24"/>
+                </linearGradient>
+                <linearGradient id="board" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#f0e3c2"/>
+                  <stop offset="50%" stopColor="#fff7e2"/>
+                  <stop offset="100%" stopColor="#e0d2b0"/>
+                </linearGradient>
+              </defs>
+              <rect width="320" height="200" fill="url(#sand)"/>
+              {/* sand grain noise — tiny circles */}
+              {Array.from({ length: 60 }).map((_, i) => (
+                <circle key={i}
+                  cx={(i * 53) % 320}
+                  cy={(i * 31) % 200}
+                  r={0.6}
+                  fill="rgba(255,255,255,0.05)" />
+              ))}
+              {/* surfboard silhouette */}
+              <ellipse cx="160" cy="115" rx="120" ry="32" fill="url(#board)" opacity="0.9"/>
+              <path d="M 50 113 Q 160 95 270 113 Q 160 132 50 113 Z" fill="none" stroke="#9c1f1f" strokeWidth="0.6" opacity="0.6"/>
+              <path d="M 60 117 Q 160 100 260 117" fill="none" stroke="#1f3a8c" strokeWidth="0.5" opacity="0.4"/>
+            </svg>
+            <div style={{
+              position: 'absolute',
+              ...watermarkPositionStyle(value),
+              color: 'rgba(255,255,255,0.78)',
+              fontSize: 14,
+              fontWeight: 500,
+              letterSpacing: '0.02em',
+              textShadow: '0 1px 3px rgba(0,0,0,0.4)',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+              fontStyle: 'italic',
+            }}>
+              Miguel Mendes Photography
+            </div>
+          </div>
+          <div className="flex gap-1.5 mt-3 mb-1">
+            <span style={{ width: 22, height: 14, background: '#7a7a7e', borderRadius: 2 }} />
+            <span style={{ width: 22, height: 14, background: '#c7c7cc', borderRadius: 2 }} />
+          </div>
+          <div className="text-[11px] mt-1 text-center" style={{ color: 'var(--text-tertiary)', lineHeight: 1.45 }}>
+            Image shown is for preview purposes only.<br />
+            This setting only applies to Photos.
+          </div>
         </div>
       );
     };
@@ -1705,6 +1905,41 @@
           </div>
         );
       }
+      if (s.type === 'position') {
+        return <WatermarkPositionPicker value={value || 'mc'} onChange={onChange} disabled={disabled} />;
+      }
+      if (s.type === 'video-preview-config') {
+        const start    = (value && value.start    != null) ? value.start    : '00';
+        const duration = (value && value.duration != null) ? value.duration : '15';
+        return (
+          <div style={{ width: '100%', maxWidth: 520 }}>
+            <p className="text-[13px] mb-2" style={{ color: 'var(--text-primary)' }}>
+              Set your default for creating previews for <strong>ALL videos</strong> uploaded to this gallery.
+            </p>
+            <p className="text-[13px] font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+              Set the start time and duration for the video as your preview.
+            </p>
+            <div className="flex items-end gap-3 mb-5">
+              <div>
+                <div className="text-[12px] mb-1.5" style={{ color: 'var(--text-secondary)' }}>Start Time (in sec)</div>
+                <V5Select value={start} options={['00','05','10','15','30','45']}
+                  disabled={disabled}
+                  onChange={(v) => onChange({ start: v, duration })} minWidth={110} />
+              </div>
+              <span className="text-[13px] pb-2" style={{ color: 'var(--text-secondary)' }}>and</span>
+              <div>
+                <div className="text-[12px] mb-1.5" style={{ color: 'var(--text-secondary)' }}>Duration (in sec)</div>
+                <V5Select value={duration} options={['15','30']}
+                  disabled={disabled}
+                  onChange={(v) => onChange({ start, duration: v })} minWidth={110} />
+              </div>
+            </div>
+            <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+              <strong>NOTE:</strong> Enabling or changing this feature will only affect new videos uploaded to your account. You can set up and customize previews by selecting individual videos within a gallery.
+            </p>
+          </div>
+        );
+      }
       if (s.type === 'radio') {
         return (
           <div className="flex items-center gap-5 flex-wrap">
@@ -1723,6 +1958,163 @@
           </div>
         );
       }
+      if (s.type === 'screenshot-config') {
+        const cfg = value || {};
+        const desktopOn = !!cfg.desktop;
+        const mobileOn = !!cfg.mobile;
+        const desktopTitle   = cfg.desktopTitle   !== undefined ? cfg.desktopTitle   : 'Do Not Screenshot.';
+        const desktopMessage = cfg.desktopMessage !== undefined ? cfg.desktopMessage : 'Unauthorized reproduction, distribution, or copying of these images by any means, including screenshots, is strictly prohibited and may constitute copyright infringement under the Copyright Act. Violators may be subject to legal action and monetary damages.';
+        const mobileScope    = cfg.mobileScope    || 'full';
+        const mobileBlurType = cfg.mobileBlurType || 'diagonal';
+        const mobileBanner   = !!cfg.mobileBanner;
+        const update = (patch) => { if (!disabled) onChange({ ...cfg, ...patch }); };
+        const blurOverlay = {
+          radial:   { background: 'radial-gradient(circle at 50% 40%, transparent 22%, rgba(190,170,145,0.85) 62%)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', maskImage: 'radial-gradient(circle at 50% 40%, transparent 22%, black 62%)', WebkitMaskImage: 'radial-gradient(circle at 50% 40%, transparent 22%, black 62%)' },
+          diagonal: { backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', clipPath: 'polygon(0 0, 72% 0, 100% 28%, 100% 100%, 28% 100%, 0 72%)', background: 'rgba(190,170,145,0.25)' },
+          vertical: { top: '15%', bottom: '15%', left: 0, right: 0, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', background: 'rgba(190,170,145,0.2)' },
+        };
+        return (
+          <div style={{ width: '100%' }}>
+            {/* Notice */}
+            <div className="flex items-start gap-2 mb-4 rounded-md px-3 py-2.5"
+              style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#dc2626" style={{ flexShrink: 0, marginTop: 1 }}>
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                <line x1="12" y1="17" x2="12.01" y2="17" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              <span className="text-[12px]" style={{ color: '#dc2626' }}>
+                <strong>Notice:</strong> This is deterrence only and does not completely prevent screenshots.
+              </span>
+            </div>
+            {/* Desktop Deterrence */}
+            <div className="rounded-lg mb-3" style={{ border: '1px solid var(--card-border)', overflow: 'hidden' }}>
+              <div className="flex items-center gap-3 px-4 py-3"
+                style={{ borderBottom: desktopOn ? '1px solid var(--card-border)' : 'none' }}>
+                <Toggle size="sm" checked={desktopOn} onChange={() => update({ desktop: !desktopOn })} />
+                <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>Desktop Deterrence</span>
+              </div>
+              {desktopOn && (
+                <div className="px-4 pt-4 pb-4">
+                  <div className="mb-4">
+                    <label className="block text-[12px] font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Title</label>
+                    <input type="text" value={desktopTitle} disabled={disabled}
+                      onChange={e => update({ desktopTitle: e.target.value })}
+                      className="rounded-md px-3 py-2 text-[13px]"
+                      style={{ border: '1px solid var(--card-border)', outline: 'none', color: 'var(--text-primary)', background: disabled ? '#f5f5f5' : '#fff', width: '100%' }} />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Protection Message</label>
+                    <div style={{ border: '1px solid var(--card-border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div className="flex items-center gap-0.5 px-2 py-1.5" style={{ borderBottom: '1px solid var(--card-border)', background: '#fafafa' }}>
+                        {[{ label: 'B', cmd: 'bold', s: { fontWeight: 700 } }, { label: 'I', cmd: 'italic', s: { fontStyle: 'italic' } }, { label: 'U', cmd: 'underline', s: { textDecoration: 'underline' } }].map(btn => (
+                          <button key={btn.cmd} type="button"
+                            onMouseDown={e => { e.preventDefault(); document.execCommand(btn.cmd); }}
+                            className="px-2 py-1 rounded text-[12px]"
+                            style={{ ...btn.s, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                            {btn.label}
+                          </button>
+                        ))}
+                        <button type="button" className="px-2 py-1 rounded"
+                          style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>
+                          🔗
+                        </button>
+                      </div>
+                      <textarea value={desktopMessage} disabled={disabled}
+                        onChange={e => update({ desktopMessage: e.target.value })}
+                        rows={4}
+                        style={{ width: '100%', border: 'none', outline: 'none', padding: '10px 12px', fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6, background: disabled ? '#f5f5f5' : '#fff', fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Mobile Deterrence */}
+            <div className="rounded-lg" style={{ border: '1px solid var(--card-border)', overflow: 'hidden' }}>
+              <div className="flex items-center gap-3 px-4 py-3"
+                style={{ borderBottom: mobileOn ? '1px solid var(--card-border)' : 'none' }}>
+                <Toggle size="sm" checked={mobileOn} onChange={() => update({ mobile: !mobileOn })} />
+                <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>Mobile Deterrence</span>
+              </div>
+              {mobileOn && (
+                <div className="px-4 pt-4 pb-4">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Enable blur deterrence */}
+                    <div>
+                      <div className="text-[12px] font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Enable blur deterrence:</div>
+                      {[{ value: 'full', label: 'On full gallery' }, { value: 'lightbox', label: 'On lightbox only' }].map(opt => (
+                        <label key={opt.value} className="flex items-center gap-2 mb-2 cursor-pointer">
+                          <span className={`radio-dot ${mobileScope === opt.value ? 'is-on' : ''}`} />
+                          <input type="radio" className="sr-only" checked={mobileScope === opt.value}
+                            disabled={disabled} onChange={() => update({ mobileScope: opt.value })} />
+                          <span className="text-[13px]" style={{ color: 'var(--text-primary)' }}>{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {/* Select blur type */}
+                    <div>
+                      <div className="text-[12px] font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Select blur type:</div>
+                      {[{ value: 'radial', label: 'Radial blur' }, { value: 'diagonal', label: 'Diagonal blur' }, { value: 'vertical', label: 'Vertical blur' }].map(opt => (
+                        <label key={opt.value} className="flex items-center gap-2 mb-2 cursor-pointer">
+                          <span className={`radio-dot ${mobileBlurType === opt.value ? 'is-on' : ''}`} />
+                          <input type="radio" className="sr-only" checked={mobileBlurType === opt.value}
+                            disabled={disabled} onChange={() => update({ mobileBlurType: opt.value })} />
+                          <span className="text-[13px]" style={{ color: 'var(--text-primary)' }}>{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {/* Mobile blur preview */}
+                    <div>
+                      <div className="text-[10px] font-bold tracking-widest mb-2"
+                        style={{ color: 'var(--text-tertiary)' }}>MOBILE BLUR PREVIEW</div>
+                      <div className="rounded-lg overflow-hidden" style={{ position: 'relative', height: 160, maxWidth: 260 }}>
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #7a6245 0%, #b8956a 25%, #e0c9a0 50%, #9b8260 72%, #5e4430 100%)' }} />
+                        <div style={{ position: 'absolute', top: '8%', left: '20%', width: 70, height: 90, borderRadius: '50% 50% 45% 45%', background: 'rgba(220,190,155,0.5)', filter: 'blur(4px)' }} />
+                        <div style={{ position: 'absolute', inset: 0, ...blurOverlay[mobileBlurType] }} />
+                      </div>
+                      <div className="mt-1.5 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                        {mobileBlurType === 'radial' ? 'Radial' : mobileBlurType === 'diagonal' ? 'Diagonal' : 'Vertical'} Blur Effect
+                      </div>
+                    </div>
+                    {/* Show banner */}
+                    <div>
+                      <div className="text-[12px] font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Show banner:</div>
+                      <label className="flex items-center gap-2 mb-1 cursor-pointer">
+                        <span className={`check-box ${mobileBanner ? 'is-on' : ''}`} />
+                        <input type="checkbox" className="sr-only" checked={mobileBanner}
+                          disabled={disabled} onChange={e => update({ mobileBanner: e.target.checked })} />
+                        <span className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
+                          Banner Message <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>(optional)</span>
+                        </span>
+                      </label>
+                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                        Display a dismissable banner with instructions on how users can manipulate the blur effect.
+                      </p>
+                      {mobileBanner && (
+                        <div className="rounded-lg p-3 mt-3" style={{ background: '#1c1c1e', maxWidth: 260 }}>
+                          <div className="flex items-start justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span style={{ color: '#666', fontSize: 11, letterSpacing: 3 }}>⋮⋮⋮</span>
+                              <span className="text-[12px] font-semibold" style={{ color: '#fff' }}>Why are images blurry?</span>
+                            </div>
+                            <span style={{ color: '#666', fontSize: 12, cursor: 'default' }}>✕</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed" style={{ color: '#999' }}>
+                            This website uses a blur effect on images to prevent unlawful screen shots.
+                          </p>
+                          <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#999' }}>
+                            Tap around parts of the image to move the position of the blur.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
       return null;
     };
 
@@ -1734,60 +2126,91 @@
       const visibleSettings = feature.settings.filter(s => isSettingVisibleForRole(s, role.id, feature.id, perRole));
       const topLevel = visibleSettings.filter(s => !s.dependsOn);
       const childrenOf = (id) => visibleSettings.filter(s => s.dependsOn?.settingId === id);
-      // Mirror the per-role behavior: when the single role has the feature off, dim the
-      // controls so they read as inactive without removing context.
       const roleEnabled = !!perRole[role.id]?.[feature.id]?.enabled;
       const disabledStyle = roleEnabled ? null : { opacity: 0.5, pointerEvents: 'none' };
+
+      // Split into main settings (go in a single white card) vs. special ones (fullWidth / sharedCard get their own treatment)
+      const mainSettings = topLevel.filter(s => !s.sharedCard && !s.fullWidth);
+      const specialSettings = topLevel.filter(s => s.sharedCard || s.fullWidth);
+
       return (
-        <div className="multi-panel-body px-8 py-2" style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
-          {topLevel.map((s, i) => {
-            const isToggle = s.type === 'toggle';
-            const kids = childrenOf(s.id);
-            const showDivider = !!s.optional && i !== 0;
-            return (
-              <div key={s.id}
-                style={{
-                  borderTop: showDivider ? '1px solid var(--card-border)' : 'none',
-                  marginTop: showDivider ? 6 : 0,
-                }}>
-                <div className="shared-flat-row grid items-center gap-4"
-                  style={{
-                    gridTemplateColumns: '1fr auto',
-                    padding: '14px 0',
-                    alignItems: isToggle ? 'flex-start' : 'center',
-                  }}>
-                  <div style={{ opacity: roleEnabled ? 1 : 0.6 }}>
-                    <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
-                    {s.meta && (
-                      <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
-                        {s.meta}
+        <div className="multi-panel-body px-8 py-4" style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
+          {/* Main settings — all inside one white card */}
+          {mainSettings.length > 0 && (
+            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--card-border)', background: '#fff' }}>
+              {mainSettings.map((s, i) => {
+                const isToggle = s.type === 'toggle';
+                const kids = childrenOf(s.id);
+                return (
+                  <React.Fragment key={s.id}>
+                    <div className="grid items-center gap-4"
+                      style={{
+                        gridTemplateColumns: '1fr auto',
+                        padding: '12px 14px',
+                        borderTop: i > 0 ? '1px solid var(--card-border)' : 'none',
+                        alignItems: isToggle ? 'flex-start' : 'center',
+                      }}>
+                      <div style={{ opacity: roleEnabled ? 1 : 0.6 }}>
+                        {s.label && <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>}
+                        {s.meta && <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>{s.meta}</div>}
                       </div>
-                    )}
-                  </div>
-                  <div className="control-end flex" style={disabledStyle} aria-disabled={!roleEnabled}>
-                    <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
+                      <div className="control-end flex" style={disabledStyle} aria-disabled={!roleEnabled}>
+                        <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
+                      </div>
+                    </div>
+                    {kids.map(c => (
+                      c.fullWidth ? (
+                        <div key={c.id} style={{ borderTop: '1px solid var(--card-border)', padding: '14px 16px', background: '#fff', opacity: roleEnabled ? 1 : 0.6 }}>
+                          <SettingControl s={c} value={perRole[role.id]?.[feature.id]?.values?.[c.id]} onChange={(v) => onUpdate(role.id, c.id, v)} compact disabled={!roleEnabled} />
+                        </div>
+                      ) : (
+                        <div key={c.id} className="grid items-center gap-4"
+                          style={{
+                            gridTemplateColumns: '1fr auto',
+                            padding: '10px 14px 10px 32px',
+                            borderTop: '1px solid var(--card-border)',
+                            background: '#fff',
+                          }}>
+                          <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
+                            <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
+                            <span>{c.label}</span>
+                          </div>
+                          <div className="control-end flex" style={disabledStyle} aria-disabled={!roleEnabled}>
+                            <SettingControl s={c} value={perRole[role.id]?.[feature.id]?.values?.[c.id]} onChange={(v) => onUpdate(role.id, c.id, v)} compact />
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          )}
+          {/* Special settings — fullWidth in their own white box, sharedCard in their own white card */}
+          {specialSettings.map(s => (
+            s.fullWidth ? (
+              <div key={s.id} style={{ marginTop: 10, opacity: roleEnabled ? 1 : 0.6 }}>
+                <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--card-border)', padding: 16 }}>
+                  <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact disabled={!roleEnabled} />
+                </div>
+              </div>
+            ) : s.sharedCard ? (
+              <div key={s.id} style={{ marginTop: 10 }}>
+                <div className="rounded-lg" style={{ border: '1px solid var(--card-border)', background: '#fff', overflow: 'hidden' }}>
+                  <div className="flex items-start justify-between gap-4 px-4 py-3">
+                    <div>
+                      {s.label && <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>}
+                      {s.meta && <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>{s.meta}</div>}
+                      <div className="text-[11px] italic mt-1" style={{ color: 'var(--text-tertiary)' }}>Applies to all roles</div>
+                    </div>
+                    <div className="flex-shrink-0 pt-0.5">
+                      <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact />
+                    </div>
                   </div>
                 </div>
-                {kids.map(c => (
-                  <div key={c.id}
-                    className="shared-flat-row grid items-center gap-4"
-                    style={{
-                      gridTemplateColumns: '1fr auto',
-                      padding: '6px 0 12px 22px',
-                      marginTop: -8,
-                    }}>
-                    <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
-                      <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
-                      <span>{c.label}</span>
-                    </div>
-                    <div className="control-end flex" style={disabledStyle} aria-disabled={!roleEnabled}>
-                      <SettingControl s={c} value={perRole[role.id]?.[feature.id]?.values?.[c.id]} onChange={(v) => onUpdate(role.id, c.id, v)} compact />
-                    </div>
-                  </div>
-                ))}
               </div>
-            );
-          })}
+            ) : null
+          ))}
         </div>
       );
     };
@@ -1799,17 +2222,43 @@
     const SharedRowFlat = ({ s, value, onChangeAll, isFirst, children = [], childValues = {}, onChildShared }) => {
       const isToggle = s.type === 'toggle';
       const showDivider = !!s.optional && !isFirst;
+      // Full-width settings render with padding inside their outer white card.
+      if (s.fullWidth) {
+        return (
+          <div style={{ padding: '14px 16px' }}>
+            <SettingControl s={s} value={value} onChange={onChangeAll} compact />
+          </div>
+        );
+      }
+      // sharedCard settings render as a white bordered card with "Applies to all roles" note.
+      if (s.sharedCard) {
+        return (
+          <div style={{ marginTop: showDivider ? 10 : 10 }}>
+            <div className="rounded-lg" style={{ border: '1px solid var(--card-border)', background: '#fff', overflow: 'hidden' }}>
+              <div className="flex items-start justify-between gap-4 px-4 py-3">
+                <div>
+                  {s.label && <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>}
+                  {s.meta && <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>{s.meta}</div>}
+                  <div className="text-[11px] italic mt-1" style={{ color: 'var(--text-tertiary)' }}>Applies to all roles</div>
+                </div>
+                <div className="flex-shrink-0 pt-0.5">
+                  <SettingControl s={s} value={value} onChange={onChangeAll} compact />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
       return (
         <div style={{
           borderTop: showDivider ? '1px solid var(--card-border)' : 'none',
-          marginTop: showDivider ? 6 : 0,
         }}>
           <div className="shared-flat-row grid gap-3"
             style={{ gridTemplateColumns: '1fr auto',
-                     padding: '14px 0',
+                     padding: '14px 16px',
                      alignItems: isToggle ? 'flex-start' : 'center' }}>
             <div>
-              <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
+              {s.label && <div className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</div>}
               {s.meta && (
                 <div className="text-[12px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
                   {s.meta}
@@ -1821,6 +2270,17 @@
             </div>
           </div>
           {children.map(c => (
+            c.fullWidth ? (
+              <div key={c.id} style={{ padding: '0 0 14px 0', marginTop: -4 }}>
+                {c.label && (
+                  <div className="flex items-center gap-1.5 text-[12px] mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
+                    <span>{c.label}</span>
+                  </div>
+                )}
+                <SettingControl s={c} value={childValues[c.id]} onChange={(v) => onChildShared && onChildShared(c.id, v)} compact />
+              </div>
+            ) : (
             <div key={c.id}
               className="shared-flat-row grid gap-3"
               style={{
@@ -1837,6 +2297,7 @@
                 <SettingControl s={c} value={childValues[c.id]} onChange={(v) => onChildShared && onChildShared(c.id, v)} compact />
               </div>
             </div>
+            )
           ))}
         </div>
       );
@@ -1850,63 +2311,88 @@
     const PerRoleGroup = ({ s, visibleRoles, perRole, featureId, onUpdate, isFirst, childSettings = [] }) => (
       <div style={{
         borderTop: !isFirst ? '1px solid var(--card-border)' : 'none',
-        paddingTop: isFirst ? 14 : 18,
-        paddingBottom: 14,
+        paddingTop: isFirst ? 12 : 14,
+        paddingBottom: 12,
       }}>
-        <div className="text-[13px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{s.label}</div>
-        <div className="rounded-lg overflow-hidden bg-white" style={{ border: '1px solid var(--card-border)' }}>
-          {visibleRoles.map((r, idx) => {
-            const value = perRole[r.id]?.[featureId]?.values?.[s.id];
-            const roleEnabled = !!perRole[r.id]?.[featureId]?.enabled;
-            const visibleChildren = childSettings.filter(c => isSettingVisibleForRole(c, r.id, featureId, perRole));
-            // When the feature is off for this role, dim its setting controls and
-            // disable interaction so they're clearly inactive without removing context.
-            const disabledStyle = roleEnabled ? null : { opacity: 0.5, pointerEvents: 'none' };
-            return (
-              <React.Fragment key={r.id}>
-                <div
-                  className="role-row per-role-row grid items-center"
-                  style={{
-                    gridTemplateColumns: '160px 1fr',
-                    padding: '10px 14px',
-                    borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none',
-                    background: '#fff',
-                  }}>
-                  <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
+        {s.label && <div className="text-[13px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{s.label}</div>}
+        {s.fullWidth ? (
+          // Full-width setting (e.g. screenshot-config): stack each role as its own card.
+          <div className="flex flex-col gap-4">
+            {visibleRoles.map((r) => {
+              const value = perRole[r.id]?.[featureId]?.values?.[s.id];
+              const roleEnabled = !!perRole[r.id]?.[featureId]?.enabled;
+              const disabledStyle = roleEnabled ? null : { opacity: 0.55, pointerEvents: 'none' };
+              return (
+                <div key={r.id} className="rounded-lg" style={{ border: '1px solid var(--card-border)', overflow: 'hidden' }}>
+                  <div className="flex items-center gap-2 px-4 py-2.5"
+                    style={{ background: '#fff', borderBottom: '1px solid var(--card-border)' }}>
                     <span className="rounded-full shrink-0"
-                      style={{ width: 7, height: 7, background: 'var(--green)', opacity: roleEnabled ? 1 : 0.3 }} />
-                    <span className="truncate" title={r.name}>{r.name}</span>
+                      style={{ width: 7, height: 7, background: roleEnabled ? 'var(--green)' : '#ccc' }} />
+                    <span className="text-[11px] font-bold tracking-wider uppercase"
+                      style={{ color: 'var(--text-secondary)' }}>{r.name}</span>
                   </div>
-                  <div className="control-cell flex justify-end" style={disabledStyle}
-                    aria-disabled={!roleEnabled}>
-                    <SettingControl s={s} value={value} onChange={(v) => onUpdate(r.id, s.id, v)} compact />
+                  <div className="p-4" style={{ background: '#fff', ...disabledStyle }}>
+                    <SettingControl s={s} value={value} onChange={(v) => onUpdate(r.id, s.id, v)} compact disabled={!roleEnabled} />
                   </div>
                 </div>
-                {visibleChildren.map(c => (
-                  <div key={c.id}
-                    className="role-row per-role-row grid items-center child-row"
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-lg overflow-hidden bg-white" style={{ border: '1px solid var(--card-border)' }}>
+            {visibleRoles.map((r, idx) => {
+              const value = perRole[r.id]?.[featureId]?.values?.[s.id];
+              const roleEnabled = !!perRole[r.id]?.[featureId]?.enabled;
+              const visibleChildren = childSettings.filter(c => isSettingVisibleForRole(c, r.id, featureId, perRole));
+              // When the feature is off for this role, dim its setting controls and
+              // disable interaction so they're clearly inactive without removing context.
+              const disabledStyle = roleEnabled ? null : { opacity: 0.5, pointerEvents: 'none' };
+              return (
+                <React.Fragment key={r.id}>
+                  <div
+                    className="role-row per-role-row grid items-center"
                     style={{
                       gridTemplateColumns: '160px 1fr',
-                      padding: '8px 14px 10px 32px',
-                      background: 'var(--soft-bg)',
-                      minHeight: 0,
+                      padding: '10px 14px',
+                      borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none',
+                      background: '#fff',
                     }}>
-                    <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
-                      <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
-                      <span className="truncate" title={c.label}>{c.label}</span>
+                    <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
+                      <span className="rounded-full shrink-0"
+                        style={{ width: 7, height: 7, background: 'var(--green)', opacity: roleEnabled ? 1 : 0.3 }} />
+                      <span className="truncate" title={r.name}>{r.name}</span>
                     </div>
                     <div className="control-cell flex justify-end" style={disabledStyle}
                       aria-disabled={!roleEnabled}>
-                      <SettingControl s={c}
-                        value={perRole[r.id]?.[featureId]?.values?.[c.id]}
-                        onChange={(v) => onUpdate(r.id, c.id, v)} compact />
+                      <SettingControl s={s} value={value} onChange={(v) => onUpdate(r.id, s.id, v)} compact />
                     </div>
                   </div>
-                ))}
-              </React.Fragment>
-            );
-          })}
-        </div>
+                  {visibleChildren.map(c => (
+                    <div key={c.id}
+                      className="role-row per-role-row grid items-center child-row"
+                      style={{
+                        gridTemplateColumns: '160px 1fr',
+                        padding: '10px 14px 10px 32px',
+                        background: '#fff',
+                        minHeight: 0,
+                      }}>
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
+                        <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
+                        <span className="truncate" title={c.label}>{c.label}</span>
+                      </div>
+                      <div className="control-cell flex justify-end" style={disabledStyle}
+                        aria-disabled={!roleEnabled}>
+                        <SettingControl s={c}
+                          value={perRole[r.id]?.[featureId]?.values?.[c.id]}
+                          onChange={(v) => onUpdate(r.id, c.id, v)} compact />
+                      </div>
+                    </div>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
 
@@ -1943,47 +2429,70 @@
       const optionalSettings = feature.settings.filter(s => s.optional);
       const refRoleId = roles[0].id;
 
+      // Compute renderable main settings at component level so it's accessible throughout.
+      const topLevelMain = mainSettings.filter(s => !s.dependsOn);
+      const childrenOfMain = (id) => mainSettings.filter(s => s.dependsOn?.settingId === id);
+      const renderable = topLevelMain
+        .map(s => ({
+          s,
+          visibleRoles: roles.filter(r => isSettingVisibleForRole(s, r.id, feature.id, perRole)),
+          childSettings: childrenOfMain(s.id),
+        }))
+        .filter(({ visibleRoles }) => visibleRoles.length > 0);
+
+      // Top-level optional settings (shared across all roles — e.g. watermark source).
+      const topLevelOptional = optionalSettings.filter(s => !s.dependsOn);
+
       return (
         <div style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
           <div className="multi-panel-body px-8 pt-4 pb-5">
-            {(() => {
-              // Render only top-level settings; dependent ones are nested inline
-              // inside their parent group's role row (e.g. "Number of images allowed"
-              // appears under the role whose Download Type is "Specific Amount Download").
-              const topLevel = mainSettings.filter(s => !s.dependsOn);
-              const childrenOf = (id) => mainSettings.filter(s => s.dependsOn?.settingId === id);
-              const renderable = topLevel
-                .map(s => ({
-                  s,
-                  visibleRoles: roles.filter(r => isSettingVisibleForRole(s, r.id, feature.id, perRole)),
-                  childSettings: childrenOf(s.id),
-                }))
-                .filter(({ visibleRoles }) => visibleRoles.length > 0);
-              if (renderable.length === 0) {
-                return (
-                  <div className="text-[12px] italic py-3" style={{ color: 'var(--text-tertiary)' }}>
-                    No settings to configure for this feature.
-                  </div>
-                );
-              }
-              return renderable.map(({ s, visibleRoles, childSettings }, i) => (
-                <PerRoleGroup key={s.id} s={s} visibleRoles={visibleRoles} perRole={perRole}
-                  featureId={feature.id}
-                  onUpdate={(rId, sId, v) => onUpdate(rId, sId, v)}
-                  isFirst={i === 0} childSettings={childSettings} />
-              ));
-            })()}
-
-            {optionalSettings.length > 0 && (
-              <div style={{ borderTop: '1px solid var(--card-border)', marginTop: 6, paddingTop: 4 }}>
-                {optionalSettings.map((s) => (
-                  <SharedRowFlat key={s.id} s={s}
-                    value={perRole[refRoleId]?.[feature.id]?.values?.[s.id]}
-                    onChangeAll={(v) => onUpdateShared(s.id, v)}
-                    isFirst />
-                ))}
+            {renderable.length === 0 && topLevelOptional.length === 0 ? (
+              <div className="text-[12px] italic py-3" style={{ color: 'var(--text-tertiary)' }}>
+                No settings to configure for this feature.
               </div>
-            )}
+            ) : renderable.map(({ s, visibleRoles, childSettings }, i) => (
+              <PerRoleGroup key={s.id} s={s} visibleRoles={visibleRoles} perRole={perRole}
+                featureId={feature.id}
+                onUpdate={(rId, sId, v) => onUpdate(rId, sId, v)}
+                isFirst={i === 0} childSettings={childSettings} />
+            ))}
+
+            {topLevelOptional.length > 0 && (() => {
+              // sharedCard settings get their own standalone white card; everything else
+              // is grouped together inside one shared white card.
+              const groupedOptionals    = topLevelOptional.filter(s => !s.sharedCard);
+              const sharedCardOptionals = topLevelOptional.filter(s =>  s.sharedCard);
+              const renderSharedRow = (s) => {
+                const curVal = perRole[refRoleId]?.[feature.id]?.values?.[s.id];
+                const visibleChildren = optionalSettings.filter(c =>
+                  c.dependsOn?.settingId === s.id && c.dependsOn.values.includes(curVal)
+                );
+                const childValues = Object.fromEntries(
+                  visibleChildren.map(c => [c.id, perRole[refRoleId]?.[feature.id]?.values?.[c.id]])
+                );
+                return (
+                  <SharedRowFlat key={s.id} s={s}
+                    value={curVal}
+                    onChangeAll={(v) => onUpdateShared(s.id, v)}
+                    isFirst
+                    children={visibleChildren}
+                    childValues={childValues}
+                    onChildShared={(cId, v) => onUpdateShared(cId, v)} />
+                );
+              };
+              return (
+                <>
+                  {groupedOptionals.length > 0 && (
+                    <div style={{ marginTop: renderable.length > 0 ? 10 : 0 }}>
+                      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--card-border)', background: '#fff' }}>
+                        {groupedOptionals.map(renderSharedRow)}
+                      </div>
+                    </div>
+                  )}
+                  {sharedCardOptionals.map(renderSharedRow)}
+                </>
+              );
+            })()}
           </div>
         </div>
       );
@@ -1994,6 +2503,13 @@
     // feature label on the left + a toggle column for every role.
     // On mobile we flip it to a stacked card so it fits a narrow viewport: feature header
     // on top (clickable to expand settings), and each role rendered as a label/toggle row.
+    // Read a shared (optional) setting value off the first role; shared settings keep the
+    // same value on every role, so any one of them is canonical.
+    const getSharedValue = (perRole, roles, featureId, settingId) => {
+      const refRoleId = roles[0]?.id;
+      return refRoleId ? perRole[refRoleId]?.[featureId]?.values?.[settingId] : undefined;
+    };
+
     const MatrixRow = ({ feature, roles, perRole, isOpen, onToggleOpen, onToggleEnabled, gridCols, hasSettings, isMobile, onEditSettings }) => {
       if (isMobile) {
         // Mobile no longer expands inline — the "EDIT SETTINGS" link opens a full-screen modal
@@ -2007,45 +2523,69 @@
                   <FeatureIcon name={feature.icon} />
                 </span>
               )}
-              <div className="text-[14px] font-medium leading-tight flex-1" style={{ color: 'var(--text-primary)' }}>
-                {feature.name}
+              <div className="flex-1">
+                <div className="text-[14px] font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>
+                  {feature.name}
+                </div>
+                {feature.appliesToAll && !feature.sharedToggle && (
+                  <div className="text-[12px] italic" style={{ color: 'var(--text-tertiary)' }}>Applies to all roles</div>
+                )}
+                {feature.sharedToggle && (
+                  <div className="text-[12px] italic" style={{ color: 'var(--text-tertiary)' }}>Applies to all roles</div>
+                )}
               </div>
-              {hasSettings && (
+              {feature.sharedToggle ? (
+                <Toggle size="sm"
+                  checked={!!perRole[roles[0]?.id]?.[feature.id]?.enabled}
+                  onChange={() => onToggleEnabled(roles[0]?.id)} />
+              ) : hasSettings ? (
                 <button onClick={onEditSettings}
                   className="text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-md whitespace-nowrap"
                   style={{ color: 'var(--brand)' }}>
                   Edit settings
                 </button>
-              )}
+              ) : null}
             </div>
             <div className="px-3 pb-3 pt-1">
-              <div className="rounded-md border bg-white" style={{ borderColor: 'var(--card-border)' }}>
-                {roles.map((r, idx) => (
-                  <div key={r.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5"
-                    style={{ borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none' }}>
-                    <span className="text-[11px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-secondary)' }}>
-                      {r.name}
-                    </span>
-                    <Toggle size="sm" checked={!!perRole[r.id]?.[feature.id]?.enabled}
-                      onChange={() => onToggleEnabled(r.id)} />
-                  </div>
-                ))}
-              </div>
+              {feature.sharedToggle ? null : feature.appliesToAll ? (
+                (() => {
+                  const v = getSharedValue(perRole, roles, feature.id, 'watermark-source');
+                  return v && v !== 'None' ? (
+                    <div className="rounded-md border bg-white px-3 py-2.5 text-[12px]"
+                      style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)', fontWeight: 500 }}>
+                      {v}
+                    </div>
+                  ) : null;
+                })()
+              ) : (
+                <div className="rounded-md border bg-white" style={{ borderColor: 'var(--card-border)' }}>
+                  {roles.map((r, idx) => (
+                    <div key={r.id}
+                      className="flex items-center justify-between gap-3 px-3 py-2.5"
+                      style={{ borderTop: idx > 0 ? '1px solid var(--card-border)' : 'none' }}>
+                      <span className="text-[11px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-secondary)' }}>
+                        {r.name}
+                      </span>
+                      <Toggle size="sm" checked={!!perRole[r.id]?.[feature.id]?.enabled}
+                        onChange={() => onToggleEnabled(r.id)} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         );
       }
       // Only the download features carry meaningful per-role configuration that benefits
       // from a plain-English summary; for everything else the toggle alone is enough.
-      const SUMMARY_FEATURES = new Set(['photo-downloads', 'video-downloads']);
+      const SUMMARY_FEATURES = new Set(['photo-downloads', 'video-downloads', 'screenshot-protection']);
       const showSummary = SUMMARY_FEATURES.has(feature.id);
       const statusLines = showSummary ? buildFeatureStatusLines(feature, roles, perRole) : [];
       return (
         <div className="border-t" style={{ borderColor: 'var(--card-border)' }}>
           <div onClick={() => hasSettings && onToggleOpen()}
-            className={`feature-row grid items-${showSummary ? 'start' : 'center'}${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
-            style={{ gridTemplateColumns: gridCols, padding: showSummary ? '18px 0' : '14px 0', cursor: hasSettings ? 'pointer' : 'default',
+            className={`feature-row grid items-center${hasSettings ? ' is-collapsible' : ''}${isOpen ? ' is-open' : ''}`}
+            style={{ gridTemplateColumns: gridCols, minHeight: 58, padding: '16px 0', cursor: hasSettings ? 'pointer' : 'default',
               background: isOpen ? 'var(--soft-bg)' : undefined }}>
             <div className="pl-6">
               <div className="flex items-center gap-2">
@@ -2060,6 +2600,16 @@
                   {feature.name}
                 </div>
               </div>
+              {feature.appliesToAll && !feature.sharedToggle && (
+                <div className="text-[12px] italic mt-0.5" style={{ color: 'var(--text-tertiary)', paddingLeft: 23 }}>
+                  Applies to all roles
+                </div>
+              )}
+              {feature.sharedToggle && (
+                <div className="text-[12px] italic mt-0.5" style={{ color: 'var(--text-tertiary)', paddingLeft: 23 }}>
+                  Applies to all roles
+                </div>
+              )}
               {showSummary && statusLines.length > 0 && (
                 <div className="mt-1.5 space-y-0.5" style={{ paddingLeft: 23 }}>
                   {statusLines.map((line, idx) => (
@@ -2070,15 +2620,44 @@
                 </div>
               )}
             </div>
-            {roles.map(r => {
-              const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
-              return (
-                <div key={r.id} className="flex justify-center">
-                  <Toggle size="sm" checked={enabled}
-                    onChange={() => onToggleEnabled(r.id)} />
-                </div>
-              );
-            })}
+            {feature.sharedToggle ? (
+              // Single shared toggle spanning all role columns.
+              (() => {
+                const enabled = !!perRole[roles[0]?.id]?.[feature.id]?.enabled;
+                return (
+                  <div className="flex items-center justify-center"
+                    style={{ gridColumn: `span ${roles.length}` }}
+                    onClick={e => e.stopPropagation()}>
+                    <Toggle size="sm" checked={enabled} onChange={() => onToggleEnabled(roles[0]?.id)} />
+                  </div>
+                );
+              })()
+            ) : feature.appliesToAll ? (
+              // Single combined cell spanning every role column.
+              // Shows the selected watermark name if one is active.
+              (() => {
+                const sharedSource = getSharedValue(perRole, roles, feature.id, 'watermark-source');
+                const hasValue = sharedSource && sharedSource !== 'None';
+                return (
+                  <div className="flex items-center justify-center text-[12px]"
+                    style={{ gridColumn: `span ${roles.length}`, color: 'var(--text-primary)' }}>
+                    {hasValue && (
+                      <span style={{ fontWeight: 500 }}>{sharedSource}</span>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
+              roles.map(r => {
+                const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
+                return (
+                  <div key={r.id} className="flex justify-center">
+                    <Toggle size="sm" checked={enabled}
+                      onChange={() => onToggleEnabled(r.id)} />
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       );
@@ -2118,7 +2697,14 @@
     // primary editing flow; opening / closing it is non-destructive (writes flow through
     // the same handlers as the stacked panels). Selects expand into radio lists for
     // easier horizontal scanning across roles.
-    const CompareAllModal = ({ features, roles, perRole, onClose, onUpdate, onUpdateShared, onToggleEnabled }) => {
+    const CompareAllModal = ({
+      features, roles, perRole, contacts = [],
+      onClose, onUpdate, onUpdateShared, onToggleEnabled,
+      onAddRole,
+      openMenuRoleId, onMenuToggle,
+      renamingRoleId, onStartRename, onCommitRename, onCancelRename,
+      onRoleSaveLater, onRoleDuplicate, onRoleRemove, onRoleAddContact,
+    }) => {
       useEffect(() => {
         const prev = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
@@ -2126,10 +2712,8 @@
         window.addEventListener('keydown', onKey);
         return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
       }, []);
-      // Per-feature collapse state — every feature section can be collapsed to just its
-      // header row so users can focus on the features that matter for the comparison.
-      // Defaults to all-expanded so first-time entry shows the full picture.
-      const [collapsed, setCollapsed] = useState(() => new Set());
+      // Per-feature collapse state — defaults to all collapsed so the modal opens clean.
+      const [collapsed, setCollapsed] = useState(() => new Set(features.filter(f => f.settings.length > 0).map(f => f.id)));
       const toggleCollapse = (fId) => {
         setCollapsed(prev => {
           const next = new Set(prev);
@@ -2155,17 +2739,15 @@
       const refRoleId = roles[0].id;
       // Column widths — roomy enough for radio option labels without crowding adjacent
       // columns. Horizontal scroll inside the modal kicks in past ~6 roles.
-      const SETTING_COL_WIDTH = 240;
-      const ROLE_COL_WIDTH = 240;
+      const SETTING_COL_WIDTH = 260;
+      const ROLE_COL_WIDTH = 300;
       const minGridWidth = SETTING_COL_WIDTH + roles.length * ROLE_COL_WIDTH;
 
       return (
-        <div className="fixed inset-0 z-[50] flex items-center justify-center modal-backdrop"
-          onClick={onClose}
-          style={{ background: 'rgba(0,0,0,0.5)', padding: '2vh 2vw' }}>
-          <div className="modal-card relative bg-white rounded-xl shadow-2xl flex flex-col"
-            style={{ width: '96vw', height: '96vh', maxWidth: 1600 }}
-            onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[50] flex modal-backdrop"
+          style={{ background: 'var(--bg, #F5F5F7)' }}>
+          <div className="modal-card compare-all-fullscreen relative bg-white flex flex-col"
+            style={{ width: '100vw', height: '100vh', maxWidth: 'none' }}>
             {/* Header */}
             <header className="flex items-center justify-between px-5 h-14 border-b shrink-0"
               style={{ borderColor: 'var(--card-border)' }}>
@@ -2178,10 +2760,18 @@
                   {features.length} feature{features.length === 1 ? '' : 's'} · {roles.length} role{roles.length === 1 ? '' : 's'}
                 </span>
               </div>
-              <button onClick={onClose} className="p-2 -mr-1 rounded-md hover:bg-black/5"
-                aria-label="Close compare" style={{ color: 'var(--text-primary)' }}>
-                <CloseIcon size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                {onAddRole && (
+                  <button onClick={onAddRole}
+                    className="add-role-btn flex items-center gap-2 text-[11px] font-bold tracking-wider px-4 py-2 rounded-full text-white whitespace-nowrap">
+                    <UserIcon size={13} stroke={2} /> ADD ROLE
+                  </button>
+                )}
+                <button onClick={onClose} className="p-2 rounded-md hover:bg-black/5"
+                  aria-label="Close compare" style={{ color: 'var(--text-primary)' }}>
+                  <CloseIcon size={20} />
+                </button>
+              </div>
             </header>
 
             {/* Body — horizontal scroll with sticky first column. The Feature/Setting
@@ -2208,16 +2798,25 @@
                     Feature / Setting
                   </div>
                   {roles.map((r, i) => (
-                    <div key={r.id} className="px-4 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider truncate"
+                    <div key={r.id} className="flex items-center justify-center"
                       style={{
-                        color: 'var(--text-primary)',
                         borderRight: i === roles.length - 1 ? 'none' : '1px solid var(--card-border)',
-                        padding: '10px 16px',
+                        padding: '8px 12px',
                       }}
                       title={r.name}>
-                      <span className="rounded-full shrink-0"
-                        style={{ width: 7, height: 7, background: 'var(--green)' }} />
-                      <span className="truncate">{r.name}</span>
+                      <ColumnHeader role={r}
+                        contactCount={contacts.filter(c => c.roleId === r.id).length}
+                        isMenuOpen={openMenuRoleId === r.id}
+                        onMenuToggle={() => onMenuToggle && onMenuToggle(openMenuRoleId === r.id ? null : r.id)}
+                        isRenaming={renamingRoleId === r.id}
+                        onCommitRename={(name) => onCommitRename && onCommitRename(r.id, name)}
+                        onCancelRename={() => onCancelRename && onCancelRename()}
+                        onRename={() => { onStartRename && onStartRename(r.id); onMenuToggle && onMenuToggle(null); }}
+                        onDuplicate={() => { onRoleDuplicate && onRoleDuplicate(r.id); onMenuToggle && onMenuToggle(null); }}
+                        onRemove={() => { onRoleRemove && onRoleRemove(r.id); onMenuToggle && onMenuToggle(null); }}
+                        onSaveLater={() => { onRoleSaveLater && onRoleSaveLater(r); onMenuToggle && onMenuToggle(null); }}
+                        onAddContact={() => onRoleAddContact && onRoleAddContact(r.id)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -2233,21 +2832,23 @@
                           tell which feature each block belongs to while scrolling vertically.
                           Clicking the header (when the feature has settings) collapses or
                           expands the rows beneath it. */}
-                      <div className="grid items-stretch" style={{
-                        gridTemplateColumns: `${SETTING_COL_WIDTH}px repeat(${roles.length}, ${ROLE_COL_WIDTH}px)`,
-                        background: 'var(--brand-cream)',
-                        borderTop: fIdx === 0 ? 'none' : '6px solid var(--soft-bg)',
-                        borderBottom: '1px solid var(--card-border)',
-                        position: 'sticky', top: 36, zIndex: 2,
-                      }}>
-                        <div onClick={() => hasSettings && toggleCollapse(feature.id)}
-                          className="pl-3 pr-3 flex items-center gap-2"
+                      <div onClick={() => hasSettings && toggleCollapse(feature.id)}
+                        className={`grid items-stretch${hasSettings ? ' compare-feature-header-expandable' : ''}`}
+                        style={{
+                          gridTemplateColumns: `${SETTING_COL_WIDTH}px repeat(${roles.length}, ${ROLE_COL_WIDTH}px)`,
+                          background: '#fff',
+                          borderTop: fIdx === 0 ? 'none' : '6px solid var(--soft-bg)',
+                          borderBottom: '1px solid var(--card-border)',
+                          position: 'sticky', top: 36, zIndex: 2,
+                          cursor: hasSettings ? 'pointer' : 'default',
+                        }}>
+                        <div
+                          className="pl-3 pr-3 flex items-center gap-2 compare-feature-header-sticky"
                           style={{
-                            background: 'var(--brand-cream)',
+                            background: '#fff',
                             borderRight: '1px solid var(--card-border)',
                             position: 'sticky', left: 0, zIndex: 3,
                             padding: '10px 12px 10px 12px',
-                            cursor: hasSettings ? 'pointer' : 'default',
                             userSelect: 'none',
                           }}
                           title={hasSettings ? (isCollapsed ? 'Expand settings' : 'Collapse settings') : undefined}>
@@ -2262,31 +2863,67 @@
                             <ChevronDown size={14} />
                           </span>
                           {feature.icon && (
-                            <span className="flex items-center justify-center shrink-0" style={{ width: 18, height: 18, color: 'var(--brand)' }}>
+                            <span className="flex items-center justify-center shrink-0" style={{ width: 18, height: 18, color: 'var(--text-secondary)' }}>
                               <FeatureIcon name={feature.icon} />
                             </span>
                           )}
-                          <span className="text-[13px] font-extrabold uppercase tracking-wider" style={{ color: 'var(--brand)', letterSpacing: '0.04em' }}>
-                            {feature.name}
-                          </span>
+                          <div>
+                            <span className="text-[13px] font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-primary)', letterSpacing: '0.04em' }}>
+                              {feature.name}
+                            </span>
+                            {feature.appliesToAll && (
+                              <div className="text-[11px] italic" style={{ color: 'var(--text-tertiary)' }}>Applies to all roles</div>
+                            )}
+                          </div>
                         </div>
-                        {roles.map((r, i) => {
-                          const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
-                          return (
-                            <div key={r.id} className="flex items-center gap-2"
-                              style={{
-                                borderRight: i === roles.length - 1 ? 'none' : '1px solid var(--card-border)',
-                                padding: '10px 16px',
-                              }}>
-                              <Toggle size="sm" checked={enabled}
-                                onChange={() => handleFeatureToggle(feature, r.id)} />
-                              <span className="text-[11px] font-bold uppercase tracking-wider"
-                                style={{ color: enabled ? 'var(--brand)' : 'var(--text-tertiary)' }}>
-                                {enabled ? 'On' : 'Off'}
-                              </span>
-                            </div>
-                          );
-                        })}
+                        {feature.sharedToggle ? (
+                          // sharedToggle feature (e.g. Video Previews) — single toggle spanning all role columns
+                          (() => {
+                            const refRoleId = roles[0]?.id;
+                            const enabled = !!perRole[refRoleId]?.[feature.id]?.enabled;
+                            return (
+                              <div className="flex items-center justify-start"
+                                style={{ gridColumn: `span ${roles.length}`, padding: '10px 16px' }}
+                                onClick={e => e.stopPropagation()}>
+                                <Toggle size="sm" checked={enabled}
+                                  onChange={() => handleFeatureToggle(feature, refRoleId)} />
+                              </div>
+                            );
+                          })()
+                        ) : feature.appliesToAll ? (
+                          // Shared (gallery-wide) feature — no per-role toggle. Span every
+                          // role column with a single cell showing the selected watermark name.
+                          (() => {
+                            const sharedSource = getSharedValue(perRole, roles, feature.id, 'watermark-source');
+                            const hasValue = sharedSource && sharedSource !== 'None';
+                            return (
+                              <div className="flex items-center justify-start text-[12px]"
+                                style={{ gridColumn: `span ${roles.length}`, color: 'var(--text-primary)', padding: '10px 16px' }}>
+                                {hasValue && (
+                                  <span style={{ fontWeight: 500 }}>{sharedSource}</span>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          roles.map((r, i) => {
+                            const enabled = !!perRole[r.id]?.[feature.id]?.enabled;
+                            return (
+                              <div key={r.id} className="flex items-center gap-2"
+                                style={{
+                                  borderRight: i === roles.length - 1 ? 'none' : '1px solid var(--card-border)',
+                                  padding: '10px 16px',
+                                }}>
+                                <Toggle size="sm" checked={enabled}
+                                  onChange={() => handleFeatureToggle(feature, r.id)} />
+                                <span className="text-[11px] font-bold uppercase tracking-wider"
+                                  style={{ color: enabled ? 'var(--brand)' : 'var(--text-tertiary)' }}>
+                                  {enabled ? 'On' : 'Off'}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
 
                       {/* Per-setting rows — hidden while the feature is collapsed. */}
@@ -2295,31 +2932,41 @@
                         const isLast = sIdx === settings.length - 1;
                         // Optional (shared) settings span the role columns with a single control.
                         if (s.optional) {
+                          // Honour dependsOn for shared settings too — e.g. watermark-position
+                          // only shows when watermark-source is set to "My Watermark".
+                          if (s.dependsOn) {
+                            const parentValue = perRole[refRoleId]?.[feature.id]?.values?.[s.dependsOn.settingId];
+                            if (!s.dependsOn.values.includes(parentValue)) return null;
+                          }
                           const value = perRole[refRoleId]?.[feature.id]?.values?.[s.id];
                           return (
-                            <div key={s.id} className="grid items-stretch" style={{
-                              gridTemplateColumns: `${SETTING_COL_WIDTH}px 1fr`,
+                            <div key={s.id} className="flex items-stretch" style={{
                               borderBottom: isLast ? 'none' : '1px solid var(--card-border)',
-                              background: '#FBFAF6',
+                              background: '#fff',
                             }}>
-                              <div className="pl-5 pr-3 flex items-center gap-1.5 text-[12px]"
+                              <div className="flex items-center gap-1.5 text-[12px] shrink-0"
                                 style={{
+                                  width: SETTING_COL_WIDTH,
                                   color: 'var(--text-primary)', fontWeight: 600,
-                                  background: '#FBFAF6',
+                                  background: '#fff',
                                   borderRight: '1px solid var(--card-border)',
                                   position: 'sticky', left: 0, zIndex: 1,
                                   padding: '8px 12px 8px 20px',
                                 }}>
-                                <span className="truncate" title={s.label}>{s.label}</span>
+                                <span className="truncate" title={s.label || feature.name}>{s.label || feature.name}</span>
                               </div>
-                              <div className="compare-cell flex items-center gap-3" style={{ padding: '8px 16px' }}>
+                              <div className="compare-cell flex items-center gap-3" style={{ padding: '8px 16px', width: 400, minWidth: 0 }}>
                                 <SettingControl s={s} value={value} onChange={(v) => onUpdateShared(feature.id, s.id, v)} compact />
-                                <span className="text-[11px] italic" style={{ color: 'var(--text-tertiary)' }}>
+                                <span className="text-[11px] italic shrink-0" style={{ color: 'var(--text-tertiary)' }}>
                                   Applies to all roles
                                 </span>
                               </div>
                             </div>
                           );
+                        }
+                        // Hide the entire row if no role currently satisfies its dependsOn condition.
+                        if (s.dependsOn && !roles.some(r => isSettingVisibleForRole(s, r.id, feature.id, perRole))) {
+                          return null;
                         }
                         const rowBg = isChild ? 'var(--soft-bg)' : '#fff';
                         return (
@@ -2373,11 +3020,10 @@
             </div>
 
             {/* Footer */}
-            <footer className="flex items-center justify-between px-5 py-3 border-t shrink-0 text-[12px]"
-              style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
-              <span>Changes save automatically and apply immediately.</span>
+            <footer className="flex items-center justify-center px-5 py-3 border-t shrink-0"
+              style={{ borderColor: 'var(--card-border)' }}>
               <button onClick={onClose}
-                className="text-[12px] font-bold tracking-wider uppercase px-4 py-2 rounded-full text-white transition-all"
+                className="text-[12px] font-bold tracking-wider uppercase px-6 py-2 rounded-full text-white transition-all"
                 style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-sm)' }}>
                 Done
               </button>
@@ -2915,6 +3561,43 @@
       };
 
       const toggleEnabled = (featureId, roleId) => {
+        const feature = features.find(f => f.id === featureId);
+        if (feature?.sharedToggle) {
+          // Shared-toggle features flip the same enabled state across every role at once.
+          const refId = roles[0]?.id;
+          const wasEnabled = !!perRole[refId]?.[featureId]?.enabled;
+          const next = {};
+          Object.keys(perRole).forEach(rId => {
+            next[rId] = { ...perRole[rId], [featureId]: { ...perRole[rId][featureId], enabled: !wasEnabled } };
+          });
+          setPerRole(next);
+          if (!wasEnabled && feature.settings.length > 0) {
+            setOpenFeatures(prev => { if (prev.has(featureId)) return prev; const s = new Set(prev); s.add(featureId); return s; });
+          }
+          return;
+        }
+        // Screenshot Protection: turning ON auto-enables both desktop + mobile deterrence.
+        if (featureId === 'screenshot-protection') {
+          const wasEnabled = !!perRole[roleId]?.['screenshot-protection']?.enabled;
+          if (!wasEnabled) {
+            const currentConfig = perRole[roleId]?.['screenshot-protection']?.values?.['screenshot-config'] || {};
+            const featureDef = features.find(f => f.id === 'screenshot-protection');
+            const defConfig = featureDef?.settings[0]?.def || {};
+            const newConfig = { ...defConfig, ...currentConfig, desktop: true, mobile: true };
+            setPerRole({
+              ...perRole,
+              [roleId]: {
+                ...perRole[roleId],
+                ['screenshot-protection']: { enabled: true, values: { 'screenshot-config': newConfig } },
+              },
+            });
+            setOpenFeatures(prev => { if (prev.has(featureId)) return prev; const s = new Set(prev); s.add(featureId); return s; });
+          } else {
+            setPerRole({ ...perRole, [roleId]: { ...perRole[roleId], ['screenshot-protection']: { ...perRole[roleId]['screenshot-protection'], enabled: false } } });
+          }
+          return;
+        }
+
         const wasEnabled = !!perRole[roleId]?.[featureId]?.enabled;
         setPerRole({
           ...perRole,
@@ -2940,6 +3623,22 @@
       };
 
       const updateValue = (featureId, roleId, settingId, value) => {
+        // Screenshot Protection: auto-disable the role when both sub-toggles (desktop + mobile) are turned off.
+        if (featureId === 'screenshot-protection' && settingId === 'screenshot-config') {
+          const bothOff = !value.desktop && !value.mobile;
+          setPerRole({
+            ...perRole,
+            [roleId]: {
+              ...perRole[roleId],
+              [featureId]: {
+                ...perRole[roleId][featureId],
+                ...(bothOff ? { enabled: false } : {}),
+                values: { ...perRole[roleId][featureId].values, [settingId]: value },
+              },
+            },
+          });
+          return;
+        }
         setPerRole({
           ...perRole,
           [roleId]: {
@@ -3157,10 +3856,22 @@
 
           {compareAllOpen && (
             <CompareAllModal features={features} roles={roles} perRole={perRole}
+              contacts={contacts}
               onClose={() => setCompareAllOpen(false)}
               onUpdate={(fId, rId, sId, v) => updateValue(fId, rId, sId, v)}
               onUpdateShared={(fId, sId, v) => updateSharedValue(fId, sId, v)}
-              onToggleEnabled={(fId, rId) => toggleEnabled(fId, rId)} />
+              onToggleEnabled={(fId, rId) => toggleEnabled(fId, rId)}
+              onAddRole={() => setShowModal(true)}
+              openMenuRoleId={openMenuRoleId}
+              onMenuToggle={(id) => setOpenMenuRoleId(id)}
+              renamingRoleId={renamingRoleId}
+              onStartRename={(id) => { setRenamingRoleId(id); setOpenMenuRoleId(null); }}
+              onCommitRename={(id, name) => renameRole(id, name)}
+              onCancelRename={() => setRenamingRoleId(null)}
+              onRoleSaveLater={(r) => showToast(`"${r.name}" saved for later use`)}
+              onRoleDuplicate={(id) => duplicateRole(id)}
+              onRoleRemove={(id) => removeRole(id)}
+              onRoleAddContact={(id) => setContactRoleId(id)} />
           )}
 
           {toast && (
