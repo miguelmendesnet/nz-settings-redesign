@@ -2167,11 +2167,10 @@
                         <div key={c.id} className="grid items-center gap-4"
                           style={{
                             gridTemplateColumns: '1fr auto',
-                            padding: '10px 14px 10px 32px',
-                            borderTop: '1px solid var(--card-border)',
+                            padding: '14px 14px 14px 32px',
                             background: '#fff',
                           }}>
-                          <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
+                          <div className="flex items-center gap-1.5 text-[12px] font-medium" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
                             <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
                             <span>{c.label}</span>
                           </div>
@@ -2376,7 +2375,7 @@
                         background: '#fff',
                         minHeight: 0,
                       }}>
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
+                      <div className="flex items-center gap-1.5 text-[12px] font-medium" style={{ color: 'var(--text-secondary)', opacity: roleEnabled ? 1 : 0.6 }}>
                         <span aria-hidden="true" style={{ color: 'var(--brand)', opacity: 0.7 }}>↳</span>
                         <span className="truncate" title={c.label}>{c.label}</span>
                       </div>
