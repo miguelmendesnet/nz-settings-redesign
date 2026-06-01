@@ -1397,7 +1397,30 @@
       </div>
     );
 
-    const AddRoleModal = ({ onClose, onSelect, existingNames }) => {
+    // ===== Save Role Modal =====
+    const SaveRoleModal = ({ role, onClose, onSave }) => (
+      <div className="modal-backdrop fixed inset-0 z-[60] flex items-center justify-center px-4"
+        style={{ background: 'rgba(27, 28, 31, 0.45)' }} onClick={onClose}>
+        <div className="modal-card bg-white rounded-2xl border shadow-xl w-full max-w-[480px] p-6"
+          style={{ borderColor: 'var(--card-border)' }} onClick={e => e.stopPropagation()}>
+          <h3 className="text-[13px] font-bold tracking-wider mb-3" style={{ color: 'var(--text-primary)' }}>SAVE CUSTOM ROLE</h3>
+          <p className="text-[13px] mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            Saving <strong style={{ color: 'var(--text-primary)' }}>{role.name}</strong> with the following settings.
+            This role will be available from the Add Role menu.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose}
+              className="text-[12px] font-bold tracking-wider px-5 py-2 rounded-full border bg-white"
+              style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)' }}>CANCEL</button>
+            <button onClick={() => { onSave(role); onClose(); }}
+              className="text-[12px] font-bold tracking-wider px-5 py-2 rounded-full text-white"
+              style={{ background: 'var(--brand)' }}>SAVE ROLE</button>
+          </div>
+        </div>
+      </div>
+    );
+
+    const AddRoleModal = ({ onClose, onSelect, existingNames, savedRoles, onDeleteSaved }) => {
       const [step, setStep] = useState('choose');
       const [presetId, setPresetId] = useState(null);
       const [customName, setCustomName] = useState('');
@@ -1438,6 +1461,50 @@
                   <RoleCard icon={SlidersIcon} title="CREATE YOUR OWN" desc={PRESETS.custom.desc}
                     onClick={() => setStep('name')} />
                 </div>
+                {savedRoles && savedRoles.length > 0 && (
+                  <div className="mt-5">
+                    <div className="text-[11px] font-bold tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>SAVED ROLES</div>
+                    <div className="flex flex-col gap-2">
+                      {savedRoles.map(sr => {
+                        const alreadyAdded = existingNames.includes(sr.name.toLowerCase());
+                        return (
+                          <div key={sr.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+                            style={{ borderColor: 'var(--card-border)', background: '#fff' }}>
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span style={{ color: 'var(--green)', fontSize: 16 }}>🔖</span>
+                              <div className="min-w-0">
+                                <div className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{sr.name}</div>
+                                {sr.desc && <div className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>{sr.desc}</div>}
+                              </div>
+                              {alreadyAdded && (
+                                <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full ml-1 shrink-0"
+                                  style={{ background: 'var(--soft-bg)', color: 'var(--text-tertiary)', border: '1px solid var(--card-border)' }}>
+                                  ALREADY ADDED
+                                </span>
+                              )}
+                            </div>
+                            {!alreadyAdded && (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() => onSelect('saved', sr.name, null, sr)}
+                                  className="text-[11px] font-bold tracking-wider px-3 py-1.5 rounded-full border transition-all"
+                                  style={{ borderColor: 'var(--brand)', color: 'var(--brand)', background: 'white' }}>
+                                  ADD
+                                </button>
+                                <button
+                                  onClick={() => onDeleteSaved(sr.id)}
+                                  className="text-[11px] font-bold tracking-wider px-3 py-1.5 rounded-full border transition-all"
+                                  style={{ borderColor: '#fecaca', color: 'var(--danger)', background: 'white' }}>
+                                  DELETE
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end mt-5">
                   <button onClick={onClose}
                     className="text-[12px] font-bold tracking-wider px-4 py-2 rounded-full border bg-white transition-all hover:bg-[var(--bg)]"
@@ -1551,18 +1618,20 @@
     };
 
     // ===== Role Kebab Menu =====
-    const RoleMenu = ({ canRemove, onRename, onSaveLater, onDuplicate, onRemove }) => (
+    const RoleMenu = ({ canRemove, presetOnly, onRename, onSaveLater, onDuplicate, onRemove }) => (
       <div className="menu-pop absolute right-0 top-full mt-1.5 z-40 bg-white rounded-md shadow-lg border min-w-[210px] py-1.5"
         style={{ borderColor: 'var(--card-border)' }} onClick={e => e.stopPropagation()}>
-        <button onClick={onRename}
-          className="menu-item w-full text-left text-[12px] font-bold tracking-wider px-4 py-2.5"
-          style={{ color: 'var(--text-primary)' }}>RENAME</button>
-        <button onClick={onSaveLater}
-          className="menu-item w-full text-left text-[12px] font-bold tracking-wider px-4 py-2.5"
-          style={{ color: 'var(--text-primary)' }}>SAVE FOR LATER USE</button>
-        <button onClick={onDuplicate}
-          className="menu-item w-full text-left text-[12px] font-bold tracking-wider px-4 py-2.5"
-          style={{ color: 'var(--text-primary)' }}>DUPLICATE</button>
+        {!presetOnly && (<>
+          <button onClick={onRename}
+            className="menu-item w-full text-left text-[12px] font-bold tracking-wider px-4 py-2.5"
+            style={{ color: 'var(--text-primary)' }}>RENAME</button>
+          <button onClick={onSaveLater}
+            className="menu-item w-full text-left text-[12px] font-bold tracking-wider px-4 py-2.5"
+            style={{ color: 'var(--text-primary)' }}>SAVE FOR LATER USE</button>
+          <button onClick={onDuplicate}
+            className="menu-item w-full text-left text-[12px] font-bold tracking-wider px-4 py-2.5"
+            style={{ color: 'var(--text-primary)' }}>DUPLICATE</button>
+        </>)}
         {canRemove && (
           <button onClick={onRemove}
             className="menu-item-danger w-full text-left text-[12px] font-bold tracking-wider px-4 py-2.5"
@@ -1709,6 +1778,7 @@
           {isMenuOpen && role.removable && (
             <RoleMenu
               canRemove={role.removable}
+              presetOnly={role.presetId === 'client' || role.presetId === 'guest'}
               onRename={onRename}
               onSaveLater={onSaveLater}
               onDuplicate={onDuplicate}
@@ -3451,6 +3521,8 @@
       const [features, setFeatures] = useState(initialFeatures);
       const [openFeatures, setOpenFeatures] = useState(new Set());
       const [showModal, setShowModal] = useState(false);
+      const [savedRoles, setSavedRoles] = useState([]);
+      const [saveRoleTarget, setSaveRoleTarget] = useState(null); // { role, perRoleSnapshot }
       const [contactRoleId, setContactRoleId] = useState(null);
       const [openMenuRoleId, setOpenMenuRoleId] = useState(null);
       const [renamingRoleId, setRenamingRoleId] = useState(null);
@@ -3504,7 +3576,7 @@
         const preset = PRESETS[presetId];
         const id = `role-${Date.now()}`;
         const name = customName || preset.name;
-        setRoles([...roles, { id, name, removable: true }]);
+        setRoles([...roles, { id, name, removable: true, presetId }]);
         setPerRole({ ...perRole, [id]: buildRoleState(presetId) });
         setShowModal(false);
         if (contact && contact.email) {
@@ -3755,7 +3827,7 @@
                           const next = window.prompt('Rename role', r.name);
                           if (next != null) renameRole(r.id, next);
                         }}
-                        onSaveLater={() => { showToast(`"${r.name}" saved for later use`); setOpenMenuRoleId(null); }}
+                        onSaveLater={() => { setSaveRoleTarget({ role: r, snapshot: perRole[r.id] }); setOpenMenuRoleId(null); }}
                         onDuplicate={() => { duplicateRole(r.id); setOpenMenuRoleId(null); }}
                         onRemove={() => { removeRole(r.id); setOpenMenuRoleId(null); }}
                       />
@@ -3780,7 +3852,7 @@
                             onRename={() => { setRenamingRoleId(r.id); setOpenMenuRoleId(null); }}
                             onDuplicate={() => { duplicateRole(r.id); setOpenMenuRoleId(null); }}
                             onRemove={() => { removeRole(r.id); setOpenMenuRoleId(null); }}
-                            onSaveLater={() => { showToast(`"${r.name}" saved for later use`); setOpenMenuRoleId(null); }}
+                            onSaveLater={() => { setSaveRoleTarget({ role: r, snapshot: perRole[r.id] }); setOpenMenuRoleId(null); }}
                             onAddContact={() => setContactRoleId(r.id)}
                           />
                         ))}
@@ -3827,7 +3899,34 @@
 
           {showModal && (
             <AddRoleModal onClose={() => setShowModal(false)}
-              onSelect={addRole} existingNames={existingNames} />
+              onSelect={(presetId, customName, contact, savedRole) => {
+                if (presetId === 'saved' && savedRole) {
+                  // Add a saved role — restore its snapshot
+                  const id = `role-${Date.now()}`;
+                  setRoles(prev => [...prev, { id, name: savedRole.name, removable: true, presetId: 'custom' }]);
+                  setPerRole(prev => ({ ...prev, [id]: savedRole.snapshot }));
+                  setShowModal(false);
+                } else {
+                  addRole(presetId, customName, contact);
+                }
+              }}
+              existingNames={existingNames}
+              savedRoles={savedRoles}
+              onDeleteSaved={(id) => setSavedRoles(prev => prev.filter(sr => sr.id !== id))} />
+          )}
+
+          {saveRoleTarget && (
+            <SaveRoleModal
+              role={saveRoleTarget.role}
+              onClose={() => setSaveRoleTarget(null)}
+              onSave={(role) => {
+                setSavedRoles(prev => [...prev, {
+                  id: `saved-${Date.now()}`,
+                  name: role.name,
+                  snapshot: saveRoleTarget.snapshot,
+                }]);
+                showToast(`"${role.name}" saved for later use`);
+              }} />
           )}
 
           {contactRoleId && (() => {
@@ -3867,7 +3966,7 @@
               onStartRename={(id) => { setRenamingRoleId(id); setOpenMenuRoleId(null); }}
               onCommitRename={(id, name) => renameRole(id, name)}
               onCancelRename={() => setRenamingRoleId(null)}
-              onRoleSaveLater={(r) => showToast(`"${r.name}" saved for later use`)}
+              onRoleSaveLater={(r) => setSaveRoleTarget({ role: r, snapshot: perRole[r.id] })}
               onRoleDuplicate={(id) => duplicateRole(id)}
               onRoleRemove={(id) => removeRole(id)}
               onRoleAddContact={(id) => setContactRoleId(id)} />
