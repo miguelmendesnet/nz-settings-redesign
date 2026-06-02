@@ -739,7 +739,7 @@
 
     // ===== Initial data =====
     const FEATURE_DEFS = [
-      { id: 'photo-downloads', name: 'Photo Downloads', icon: 'image',
+      { id: 'photo-downloads', name: 'Photo Downloads', icon: 'image', sectionStart: 'Per Role',
         settings: [
           { id: 'download-type', type: 'select', label: 'Download Type Allowed',
             options: ['Full Gallery & Individual Download', 'Full Gallery Download', 'Specific Amount Download', 'Individual Download Only'],
@@ -785,6 +785,7 @@
       { id: 'commenting', name: 'Commenting', settings: [] },
       { id: 'sharing', name: 'Sharing', settings: [] },
       // Screenshot Protection — per-role feature with Desktop and Mobile deterrence sub-settings.
+      // sectionStart marks the beginning of a new section group in the feature list.
       // Enabling a role auto-enables both desktop + mobile; disabling both sub-toggles auto-disables the role.
       { id: 'screenshot-protection', name: 'Screenshot Protection',
         settings: [
@@ -803,7 +804,7 @@
       },
       // Watermark — applies to all roles. No per-role toggle; the watermark source
       // and its position are gallery-wide settings.
-      { id: 'watermark', name: 'Watermark', appliesToAll: true,
+      { id: 'watermark', name: 'Watermark', appliesToAll: true, sectionStart: 'General Features',
         settings: [
           { id: 'watermark-source', type: 'select', optional: true,
             meta: (<>Add a watermark to your gallery photos and choose its position. Update or add new watermarks in <a href="#" style={{ color: 'var(--brand)', fontWeight: 600, textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>Account Settings.</a></>),
@@ -2192,7 +2193,7 @@
     // Single-role flat settings (no Set per role, no diff)
     // Children of dependent settings are rendered inline as indented sub-rows directly under
     // the parent setting they belong to.
-    const SimpleSettingsBlock = ({ feature, role, perRole, onUpdate }) => {
+    const SimpleSettingsBlock = ({ feature, role, perRole, onUpdate, onSharedToggle }) => {
       const visibleSettings = feature.settings.filter(s => isSettingVisibleForRole(s, role.id, feature.id, perRole));
       const topLevel = visibleSettings.filter(s => !s.dependsOn);
       const childrenOf = (id) => visibleSettings.filter(s => s.dependsOn?.settingId === id);
@@ -2258,9 +2259,26 @@
           {/* Special settings — fullWidth in their own white box, sharedCard in their own white card */}
           {specialSettings.map(s => (
             s.fullWidth ? (
-              <div key={s.id} style={{ marginTop: 10, opacity: roleEnabled ? 1 : 0.6 }}>
-                <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--card-border)', padding: 16 }}>
-                  <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact disabled={!roleEnabled} />
+              <div key={s.id} style={{ marginTop: 10 }}>
+                <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--card-border)', overflow: 'hidden' }}>
+                  {feature.sharedToggle && onSharedToggle && (
+                    <div className="flex items-center justify-between px-4 py-3"
+                      style={{ borderBottom: '1px solid var(--card-border)' }}>
+                      <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {feature.name}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-semibold"
+                          style={{ color: roleEnabled ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+                          {roleEnabled ? 'ON' : 'OFF'}
+                        </span>
+                        <Toggle size="sm" checked={roleEnabled} onChange={onSharedToggle} />
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ padding: 16, opacity: roleEnabled ? 1 : 0.5 }}>
+                    <SettingControl s={s} value={perRole[role.id]?.[feature.id]?.values?.[s.id]} onChange={(v) => onUpdate(role.id, s.id, v)} compact disabled={!roleEnabled} />
+                  </div>
                 </div>
               </div>
             ) : s.sharedCard ? (
@@ -2493,7 +2511,7 @@
     // available role; OFF roles still appear (with a greyed indicator inside PerRoleGroup)
     // so users can configure them ahead of enabling. Optional/global settings (e.g. license)
     // remain a single shared row that applies across roles.
-    const MultiRoleSettingsBlock = ({ feature, roles, perRole, onUpdate, onUpdateShared }) => {
+    const MultiRoleSettingsBlock = ({ feature, roles, perRole, onUpdate, onUpdateShared, onSharedToggle }) => {
       const mainSettings = feature.settings.filter(s => !s.optional);
       const optionalSettings = feature.settings.filter(s => s.optional);
       const refRoleId = roles[0].id;
@@ -2554,7 +2572,27 @@
                   {groupedOptionals.length > 0 && (
                     <div style={{ marginTop: renderable.length > 0 ? 10 : 0 }}>
                       <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--card-border)', background: '#fff' }}>
-                        {groupedOptionals.map(renderSharedRow)}
+                        {feature.sharedToggle && onSharedToggle && (() => {
+                          const enabled = !!perRole[refRoleId]?.[feature.id]?.enabled;
+                          return (
+                            <div className="flex items-center justify-between px-4 py-3"
+                              style={{ borderBottom: '1px solid var(--card-border)' }}>
+                              <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                {feature.name}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[12px] font-semibold"
+                                  style={{ color: enabled ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+                                  {enabled ? 'ON' : 'OFF'}
+                                </span>
+                                <Toggle size="sm" checked={enabled} onChange={onSharedToggle} />
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <div style={{ opacity: feature.sharedToggle ? (!!perRole[refRoleId]?.[feature.id]?.enabled ? 1 : 0.5) : 1 }}>
+                          {groupedOptionals.map(renderSharedRow)}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2603,11 +2641,7 @@
                   <div className="text-[12px] italic" style={{ color: 'var(--text-tertiary)' }}>Applies to all roles</div>
                 )}
               </div>
-              {feature.sharedToggle ? (
-                <Toggle size="sm"
-                  checked={!!perRole[roles[0]?.id]?.[feature.id]?.enabled}
-                  onChange={() => onToggleEnabled(roles[0]?.id)} />
-              ) : hasSettings ? (
+              {!feature.sharedToggle && hasSettings ? (
                 <button onClick={onEditSettings}
                   className="text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-md whitespace-nowrap"
                   style={{ color: 'var(--brand)' }}>
@@ -2690,17 +2724,8 @@
               )}
             </div>
             {feature.sharedToggle ? (
-              // Single shared toggle spanning all role columns.
-              (() => {
-                const enabled = !!perRole[roles[0]?.id]?.[feature.id]?.enabled;
-                return (
-                  <div className="flex items-center justify-center"
-                    style={{ gridColumn: `span ${roles.length}` }}
-                    onClick={e => e.stopPropagation()}>
-                    <Toggle size="sm" checked={enabled} onChange={() => onToggleEnabled(roles[0]?.id)} />
-                  </div>
-                );
-              })()
+              // Toggle moved into the expanded settings panel; show empty cell here.
+              <div style={{ gridColumn: `span ${roles.length}` }} />
             ) : feature.appliesToAll ? (
               // Single combined cell spanning every role column.
               // Shows the selected watermark name if one is active.
@@ -3865,6 +3890,15 @@
 
                       return (
                         <React.Fragment key={feature.id}>
+                          {feature.sectionStart && (
+                            <div className="px-6 py-2.5"
+                              style={{ background: 'var(--soft-bg)', borderTop: '1px solid var(--card-border)' }}>
+                              <span className="text-[11px] font-bold tracking-widest uppercase"
+                                style={{ color: 'var(--text-tertiary)' }}>
+                                {feature.sectionStart}
+                              </span>
+                            </div>
+                          )}
                           <MatrixRow
                             feature={feature} roles={roles} perRole={perRole}
                             isOpen={isOpen} onToggleOpen={() => toggleOpen(feature.id)}
@@ -3880,10 +3914,13 @@
                                 feature={feature} roles={roles} perRole={perRole}
                                 onUpdate={(rId, sId, v) => updateValue(feature.id, rId, sId, v)}
                                 onUpdateShared={(sId, v) => updateSharedValue(feature.id, sId, v)}
+                                onSharedToggle={feature.sharedToggle ? () => toggleEnabled(feature.id, roles[0]?.id) : undefined}
                               />
                             ) : (
                               <SimpleSettingsBlock feature={feature} role={roles[0]} perRole={perRole}
-                                onUpdate={(rId, sId, v) => updateValue(feature.id, rId, sId, v)} />
+                                onUpdate={(rId, sId, v) => updateValue(feature.id, rId, sId, v)}
+                                onSharedToggle={feature.sharedToggle ? () => toggleEnabled(feature.id, roles[0]?.id) : undefined}
+                              />
                             )
                           )}
                         </React.Fragment>
