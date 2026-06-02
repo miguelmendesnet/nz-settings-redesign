@@ -2031,6 +2031,20 @@
       }
       if (s.type === 'screenshot-config') {
         const cfg = value || {};
+        // When the role toggle is OFF, show a clean collapsed state — just the two sub-rows.
+        if (disabled) {
+          return (
+            <div style={{ width: '100%' }}>
+              {[{ label: 'Desktop Deterrence' }, { label: 'Mobile Deterrence' }].map((item, i) => (
+                <div key={item.label} className="flex items-center gap-3 px-4 py-3 rounded-lg"
+                  style={{ border: '1px solid var(--card-border)', background: '#fff', marginBottom: i === 0 ? 8 : 0 }}>
+                  <Toggle size="sm" checked={false} onChange={() => {}} />
+                  <span className="text-[13px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          );
+        }
         const desktopOn = !!cfg.desktop;
         const mobileOn = !!cfg.mobile;
         const desktopTitle   = cfg.desktopTitle   !== undefined ? cfg.desktopTitle   : 'Do Not Screenshot.';
